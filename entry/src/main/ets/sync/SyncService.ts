@@ -419,6 +419,8 @@ export class SyncService {
       `进行中待办：${summary.activeTaskCount}`,
       `带提醒待办：${summary.reminderTaskCount}`,
       `发布结果：成功 ${summary.publishedCount} / 跳过 ${summary.skippedCount} / 失败 ${summary.failedCount}`,
+      `清理前系统提醒：${summary.beforeClearCount < 0 ? '读取失败' : summary.beforeClearCount}`,
+      `清理后系统提醒：${summary.afterClearCount < 0 ? '读取失败' : summary.afterClearCount}`,
       `系统已注册提醒：${summary.registeredCount}`
     ];
     const published = summary.publishResults.filter((item) => item.status !== 'skipped').slice(0, 5);

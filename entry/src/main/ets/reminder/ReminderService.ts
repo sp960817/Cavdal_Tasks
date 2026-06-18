@@ -25,6 +25,8 @@ export interface ReminderSyncSummary {
   skippedCount: number;
   failedCount: number;
   registeredCount: number;
+  beforeClearCount: number;
+  afterClearCount: number;
   publishResults: ReminderPublishResult[];
   registeredResults: string[];
   errors: string[];
@@ -61,6 +63,8 @@ export class ReminderService {
       skippedCount: 0,
       failedCount: 0,
       registeredCount: 0,
+      beforeClearCount: -1,
+      afterClearCount: -1,
       publishResults: [],
       registeredResults: [],
       errors: []
@@ -72,7 +76,9 @@ export class ReminderService {
     }
     try {
       await this.ensureNotificationSlot();
-      await reminderAgentManager.cancelAllReminders();
+      summary.beforeClearCount = await this.countValidReminders();
+      await this.clearAllReminders();
+      summary.afterClearCount = await this.countValidReminders();
       for (let i = 0; i < tasks.length; i++) {
         const result = await this.publishForTask(tasks[i]);
         summary.publishResults.push(result);
@@ -141,6 +147,30 @@ export class ReminderService {
     } catch (err) {
       const text = errorText(err);
       console.error(`[ReminderService] publishForTask failed taskId=${task.id}: ${text}`);
+      if (this.isQuotaError(err)) {
+        try {
+          await this.clearAllReminders();
+          const reminderId = await reminderAgentManager.publishReminder(prepared.request);
+          return {
+            taskId: task.id,
+            title: task.title,
+            status: 'published',
+            triggerAt: prepared.triggerAt,
+            reminderId,
+            detail: `清理后重试成功 reminderId=${reminderId}`
+          };
+        } catch (retryErr) {
+          const retryText = errorText(retryErr);
+          console.error(`[ReminderService] publishForTask retry failed taskId=${task.id}: ${retryText}`);
+          return {
+            taskId: task.id,
+            title: task.title,
+            status: 'error',
+            triggerAt: prepared.triggerAt,
+            detail: `配额超限，重试仍失败：${retryText}`
+          };
+        }
+      }
       return {
         taskId: task.id,
         title: task.title,
@@ -149,6 +179,41 @@ export class ReminderService {
         detail: text
       };
     }
+  }
+
+  private async clearAllReminders(): Promise<void> {
+    try {
+      const existing = await reminderAgentManager.getAllValidReminders();
+      for (let i = 0; i < existing.length; i++) {
+        try {
+          await reminderAgentManager.cancelReminder(existing[i].reminderId);
+        } catch (err) {
+          console.error(`[ReminderService] cancelReminder failed: ${errorText(err)}`);
+        }
+      }
+    } catch (err) {
+      console.error(`[ReminderService] getAllValidReminders before clear failed: ${errorText(err)}`);
+    }
+    try {
+      await reminderAgentManager.cancelAllReminders();
+    } catch (err) {
+      console.error(`[ReminderService] cancelAllReminders failed: ${errorText(err)}`);
+    }
+  }
+
+  private async countValidReminders(): Promise<number> {
+    try {
+      const list = await reminderAgentManager.getAllValidReminders();
+      return list.length;
+    } catch (err) {
+      console.error(`[ReminderService] countValidReminders failed: ${errorText(err)}`);
+      return -1;
+    }
+  }
+
+  private isQuotaError(err: Object): boolean {
+    const code = (err as Record<string, number>)['code'];
+    return code === 1700002;
   }
 
   private buildReminderRequest(task: TodoTask): PreparedReminderRequest {
