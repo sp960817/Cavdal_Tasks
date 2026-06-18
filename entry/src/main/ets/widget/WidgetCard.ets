@@ -10,7 +10,8 @@ interface GlassToken {
   blur: BlurStyle;
   border: string;
   shadowColor: string;
-  itemBg: string;
+  highlight: string;
+  lowlight: string;
 }
 
 function parseTasks(value: string): CardTask[] {
@@ -24,25 +25,25 @@ function parseTasks(value: string): CardTask[] {
 function glassToken(style: string): GlassToken {
   if (style === 'none') {
     return {
-      cardBg: '#00000000', blur: BlurStyle.NONE, border: '#30FFFFFF', shadowColor: '#12000000',
-      itemBg: '#00000000'
+      cardBg: '#00000000', blur: BlurStyle.NONE, border: '#00FFFFFF', shadowColor: '#00000000',
+      highlight: '#00FFFFFF', lowlight: '#00000000'
     };
   }
   if (style === 'regular') {
     return {
-      cardBg: '#2BFFFFFF', blur: BlurStyle.BACKGROUND_THIN, border: '#55FFFFFF', shadowColor: '#22000000',
-      itemBg: '#00000000'
+      cardBg: '#14FFFFFF', blur: BlurStyle.BACKGROUND_REGULAR, border: '#52FFFFFF', shadowColor: '#20000000',
+      highlight: '#30FFFFFF', lowlight: '#08000000'
     };
   }
   if (style === 'thick') {
     return {
-      cardBg: '#3AFFFFFF', blur: BlurStyle.BACKGROUND_REGULAR, border: '#66FFFFFF', shadowColor: '#2A000000',
-      itemBg: '#00000000'
+      cardBg: '#24FFFFFF', blur: BlurStyle.BACKGROUND_THICK, border: '#68FFFFFF', shadowColor: '#28000000',
+      highlight: '#42FFFFFF', lowlight: '#0D000000'
     };
   }
   return {
-    cardBg: '#1FFFFFFF', blur: BlurStyle.NONE, border: '#40FFFFFF', shadowColor: '#18000000',
-    itemBg: '#00000000'
+    cardBg: '#0CFFFFFF', blur: BlurStyle.BACKGROUND_THIN, border: '#3DFFFFFF', shadowColor: '#16000000',
+    highlight: '#24FFFFFF', lowlight: '#05000000'
   };
 }
 
@@ -164,7 +165,16 @@ struct WidgetCard {
     .padding(16)
     .backgroundColor(this.token().cardBg)
     .backgroundBlurStyle(this.token().blur)
+    .linearGradient({
+      angle: 135,
+      colors: [
+        [this.token().highlight, 0],
+        ['#00FFFFFF', 0.48],
+        [this.token().lowlight, 1]
+      ]
+    })
     .border({ width: 1, color: this.token().border })
+    .shadow({ radius: 18, color: this.token().shadowColor, offsetY: 5 })
     .onClick(() => this.openApp())
   }
 }
