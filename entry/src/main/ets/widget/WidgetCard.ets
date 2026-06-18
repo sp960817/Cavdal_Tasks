@@ -7,12 +7,10 @@ interface CardTask {
 
 interface GlassToken {
   cardBg: string;
-  itemBg: string;
-  border: string;
   blur: BlurStyle;
+  border: string;
   shadowColor: string;
-  gap: number;
-  shadowRadius: number;
+  itemBg: string;
 }
 
 function parseTasks(value: string): CardTask[] {
@@ -26,25 +24,25 @@ function parseTasks(value: string): CardTask[] {
 function glassToken(style: string): GlassToken {
   if (style === 'none') {
     return {
-      cardBg: '#0FFFFFFF', itemBg: '#14FFFFFF', border: '#26FFFFFF',
-      blur: BlurStyle.BACKGROUND_THIN, shadowColor: '#12000000', gap: 8, shadowRadius: 8
+      cardBg: '#00000000', blur: BlurStyle.NONE, border: '#30FFFFFF', shadowColor: '#12000000',
+      itemBg: '#00000000'
     };
   }
   if (style === 'regular') {
     return {
-      cardBg: '#29FFFFFF', itemBg: '#33FFFFFF', border: '#45FFFFFF',
-      blur: BlurStyle.BACKGROUND_REGULAR, shadowColor: '#22000000', gap: 12, shadowRadius: 14
+      cardBg: '#2BFFFFFF', blur: BlurStyle.BACKGROUND_THIN, border: '#55FFFFFF', shadowColor: '#22000000',
+      itemBg: '#00000000'
     };
   }
   if (style === 'thick') {
     return {
-      cardBg: '#3DFFFFFF', itemBg: '#47FFFFFF', border: '#5CFFFFFF',
-      blur: BlurStyle.BACKGROUND_THICK, shadowColor: '#2A000000', gap: 12, shadowRadius: 16
+      cardBg: '#3AFFFFFF', blur: BlurStyle.BACKGROUND_REGULAR, border: '#66FFFFFF', shadowColor: '#2A000000',
+      itemBg: '#00000000'
     };
   }
   return {
-    cardBg: '#1AFFFFFF', itemBg: '#24FFFFFF', border: '#33FFFFFF',
-    blur: BlurStyle.BACKGROUND_THIN, shadowColor: '#18000000', gap: 10, shadowRadius: 12
+    cardBg: '#1FFFFFFF', blur: BlurStyle.NONE, border: '#40FFFFFF', shadowColor: '#18000000',
+    itemBg: '#00000000'
   };
 }
 
@@ -95,11 +93,11 @@ struct WidgetCard {
           Text('今日清爽')
             .fontSize(15)
             .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.widget_text'))
+            .fontColor($r('app.color.widget_text_primary'))
             .textAlign(TextAlign.Center)
           Text(this.lastSyncText)
             .fontSize(10)
-            .fontColor($r('app.color.widget_secondary'))
+            .fontColor($r('app.color.widget_text_secondary'))
             .textAlign(TextAlign.Center)
         }
         .layoutWeight(1)
@@ -116,9 +114,9 @@ struct WidgetCard {
                     .width(18)
                     .height(18)
                     .borderRadius(9)
-                    .border({ width: 1.5, color: $r('app.color.widget_circle') })
+                    .border({ width: 1.5, color: $r('app.color.widget_check_border') })
                     .backgroundColor(this.completingId === task.id ?
-                      $r('app.color.widget_circle') : '#00000000')
+                      $r('app.color.widget_check_fill') : '#00000000')
                     .animation({ duration: 400, curve: Curve.EaseOut })
 
                   Text('✓')
@@ -140,7 +138,7 @@ struct WidgetCard {
                   .fontSize(14)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.completingId === task.id ?
-                    '#9CA1AA' : $r('app.color.widget_text'))
+                    $r('app.color.widget_text_secondary') : $r('app.color.widget_text_primary'))
                   .opacity(this.completingId === task.id ? 0 : 1)
                   .animation({ duration: 600, curve: Curve.EaseOut })
                   .maxLines(1)
@@ -152,8 +150,6 @@ struct WidgetCard {
               .width('100%')
               .height(30)
               .padding({ left: 4, right: 5 })
-              .backgroundColor('#00000000')
-              .borderRadius(10)
             }
           }, (task: CardTask) => task.id)
         }
@@ -168,6 +164,7 @@ struct WidgetCard {
     .padding(16)
     .backgroundColor(this.token().cardBg)
     .backgroundBlurStyle(this.token().blur)
+    .border({ width: 1, color: this.token().border })
     .onClick(() => this.openApp())
   }
 }

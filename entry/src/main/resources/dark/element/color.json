@@ -24,6 +24,10 @@
     { "name": "widget_text", "value": "#F1F5F9" },
     { "name": "widget_secondary", "value": "#9EADBD" },
     { "name": "widget_circle", "value": "#76A3FF" },
+    { "name": "widget_text_primary", "value": "#E6FFFFFF" },
+    { "name": "widget_text_secondary", "value": "#99FFFFFF" },
+    { "name": "widget_check_border", "value": "#66FFFFFF" },
+    { "name": "widget_check_fill", "value": "#E6FFFFFF" },
     { "name": "transparent", "value": "#00FFFFFF" }
   ]
 }
