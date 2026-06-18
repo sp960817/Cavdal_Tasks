@@ -1,8 +1,9 @@
 import { common } from '@kit.AbilityKit';
+import notificationManager from '@ohos.notificationManager';
 import { CalendarSource, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { TaskRepository } from '../data/TaskRepository';
 import { SyncService } from '../sync/SyncService';
-import { formatDueForDisplay } from '../formatters/DueTimeFormatter';
+import { formatDueForDisplay, parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 
 @Entry
@@ -43,12 +44,60 @@ struct Index {
   @State editingTask: TodoTask | null = null;
   @StorageProp('statusBarHeight') statusBarHeight: number = 0;
 
-  private context: common.Context = getContext(this) as common.Context;
+  private uiContext: UIContext = this.getUIContext();
+  private context: common.Context = this.requireHostContext();
   // 统一使用应用级上下文，与桌面小组件共享同一份数据存储
   private repository: TaskRepository = new TaskRepository(this.context.getApplicationContext());
   private syncService: SyncService = new SyncService(this.context.getApplicationContext());
-  private uiContext: UIContext = this.getUIContext();
   private firstPageShow: boolean = true;
+  private reminderNotificationPrompted: boolean = false;
+
+  private requireHostContext(): common.Context {
+    const hostContext = this.uiContext.getHostContext();
+    if (hostContext === undefined) {
+      throw new Error('无法获取页面 Host Context');
+    }
+    return hostContext as common.Context;
+  }
+
+  private safeShowToast(message: string): void {
+    try {
+      this.uiContext.getPromptAction().showToast({ message });
+    } catch (err) {
+      console.error('Cavdal toast error', JSON.stringify(err));
+    }
+  }
+
+  private taskHasReminder(task: TodoTask): boolean {
+    return task.status !== 'completed' && task.due.length > 0 && VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无';
+  }
+
+  private async ensureReminderNotifications(promptIfNeeded: boolean): Promise<boolean> {
+    try {
+      const enabled = await notificationManager.isNotificationEnabled();
+      if (enabled) {
+        return true;
+      }
+      if (!promptIfNeeded || this.reminderNotificationPrompted) {
+        this.statusText = '系统通知未开启，待办提醒暂不可用';
+        return false;
+      }
+      this.reminderNotificationPrompted = true;
+      await notificationManager.requestEnableNotification(this.context as never);
+      const rechecked = await notificationManager.isNotificationEnabled();
+      if (rechecked) {
+        this.safeShowToast('已开启应用通知');
+        return true;
+      }
+      this.statusText = '系统通知未开启，待办提醒不会弹出';
+      this.safeShowToast('请先开启应用通知，待办提醒才会弹出');
+      return false;
+    } catch (err) {
+      this.statusText = `通知授权失败：${JSON.stringify(err)}`;
+      console.error('Cavdal notification authorization error', JSON.stringify(err));
+      return false;
+    }
+  }
 
   aboutToAppear(): void {
     this.load();
@@ -76,6 +125,9 @@ struct Index {
       this.widgetBlurStyle = settings.widgetBlurStyle;
       this.statusText = this.configured ? '准备同步' : '请配置 CalDAV Tasks 账号';
       await this.refreshLists();
+      if (await this.ensureReminderNotifications(this.tasks.some((task: TodoTask) => this.taskHasReminder(task)))) {
+        await this.syncService.syncLocalReminders();
+      }
     } catch (err) {
       this.statusText = `启动加载失败：${JSON.stringify(err)}`;
     }
@@ -96,7 +148,7 @@ struct Index {
 
   private async discoverCalendars(): Promise<void> {
     if (this.serverUrl.length === 0 || this.username.length === 0 || this.password.length === 0) {
-      this.uiContext.getPromptAction().showToast({ message: '请填写服务器、用户名和密码' });
+      this.safeShowToast('请填写服务器、用户名和密码');
       return;
     }
     this.loading = true;
@@ -113,7 +165,7 @@ struct Index {
 
   private async saveAccount(): Promise<void> {
     if (this.calendars.length === 0) {
-      this.uiContext.getPromptAction().showToast({ message: '请先测试连接' });
+      this.safeShowToast('请先测试连接');
       return;
     }
     try {
@@ -134,6 +186,10 @@ struct Index {
       const result = await this.syncService.syncNow();
       this.statusText = result.message;
       await this.refreshLists();
+      if (this.tasks.some((task: TodoTask) => this.taskHasReminder(task))
+        && await this.ensureReminderNotifications(true)) {
+        await this.syncService.syncLocalReminders();
+      }
     } catch (err) {
       const errMsg = `${err}`;
       const errCode = (err as Record<string, number>)['code'];
@@ -158,10 +214,13 @@ struct Index {
 
   private async addTask(): Promise<void> {
     if (this.newTitle.trim().length === 0) {
-      this.uiContext.getPromptAction().showToast({ message: '请输入待办标题' });
+      this.safeShowToast('请输入待办标题');
       return;
     }
     try {
+      if (this.hasDue && this.reminderOption !== '无') {
+        await this.ensureReminderNotifications(true);
+      }
       await this.syncService.addTask(
         this.newTitle.trim(),
         this.newDescription.trim(),
@@ -180,7 +239,7 @@ struct Index {
       this.statusText = '已添加';
       await this.refreshLists();
     } catch (err) {
-      this.uiContext.getPromptAction().showToast({ message: '添加失败' });
+      this.safeShowToast('添加失败');
       this.statusText = `添加失败：${JSON.stringify(err)}`;
     }
   }
@@ -334,7 +393,7 @@ struct Index {
       await this.refreshLists();
     } catch (err) {
       this.statusText = `操作失败：${JSON.stringify(err)}`;
-      this.uiContext.getPromptAction().showToast({ message: '操作失败，请重试' });
+      this.safeShowToast('操作失败，请重试');
     }
   }
 
@@ -345,7 +404,7 @@ struct Index {
       await this.refreshLists();
     } catch (err) {
       this.statusText = `删除失败：${JSON.stringify(err)}`;
-      this.uiContext.getPromptAction().showToast({ message: '删除失败，请重试' });
+      this.safeShowToast('删除失败，请重试');
     }
   }
 
@@ -356,8 +415,23 @@ struct Index {
       this.statusText = '本地缓存已清空';
     } catch (err) {
       this.statusText = `清空失败：${JSON.stringify(err)}`;
-      this.uiContext.getPromptAction().showToast({ message: '清空失败' });
+      this.safeShowToast('清空失败');
     }
+  }
+
+  private async runReminderDiagnostics(): Promise<void> {
+    this.loading = true;
+    this.statusText = '正在执行提醒自检';
+    try {
+      await this.ensureReminderNotifications(true);
+      const report = await this.syncService.runReminderDiagnostics();
+      this.statusText = report;
+      this.safeShowToast('提醒自检完成');
+    } catch (err) {
+      this.statusText = `提醒自检失败：${JSON.stringify(err)}`;
+      this.safeShowToast('提醒自检失败');
+    }
+    this.loading = false;
   }
 
   private widgetBlurLabel(style: WidgetBlurStyle): string {
@@ -376,7 +450,7 @@ struct Index {
     } catch (err) {
       this.widgetBlurStyle = previous;
       this.statusText = `卡片设置失败：${JSON.stringify(err)}`;
-      this.uiContext.getPromptAction().showToast({ message: '卡片设置失败' });
+      this.safeShowToast('卡片设置失败');
     }
   }
 
@@ -414,12 +488,6 @@ struct Index {
   @Builder
   private SetupView() {
     Column({ space: 16 }) {
-      Text('Cavdal Tasks')
-        .fontSize(30)
-        .fontWeight(FontWeight.Bold)
-        .width('100%')
-        .margin({ top: px2vp(this.statusBarHeight) + 28 })
-
       Text('连接支持 CalDAV VTODO 的任务服务，桌面卡片可快速完成待办。')
         .fontSize(15)
         .fontColor($r('app.color.text_secondary'))
@@ -486,7 +554,7 @@ struct Index {
   @Builder
   private ActiveTaskRow(task: TodoTask) {
     Column({ space: 2 }) {
-      Row({ space: 10 }) {
+      Row({ space: 8 }) {
         Toggle({ type: ToggleType.Checkbox, isOn: false })
           .onChange((isOn: boolean) => {
             if (isOn) {
@@ -537,13 +605,13 @@ struct Index {
     }
     .width('100%')
     .height(52)
-    .padding({ left: 8, right: 8 })
+    .padding({ left: 4, right: 6 })
     .justifyContent(FlexAlign.Center)
   }
 
   @Builder
   private CompletedTaskRow(task: TodoTask) {
-    Row({ space: 10 }) {
+    Row({ space: 8 }) {
       Toggle({ type: ToggleType.Checkbox, isOn: true })
         .onChange((isOn: boolean) => {
           if (!isOn) {
@@ -569,7 +637,7 @@ struct Index {
     }
     .width('100%')
     .height(48)
-    .padding({ left: 8, right: 8 })
+    .padding({ left: 4, right: 6 })
     .alignItems(VerticalAlign.Center)
   }
 
@@ -602,7 +670,7 @@ struct Index {
                 }
               }
             })
-          }, (task: TodoTask) => task.id)
+          }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
         }
         .width('100%')
         .scrollBar(BarState.Auto)
@@ -683,7 +751,7 @@ struct Index {
                 }
               }
             })
-            }, (task: TodoTask) => task.id)
+            }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
           }
           .width('100%')
           .height(240)
@@ -713,6 +781,9 @@ struct Index {
         this.WidgetAppearanceSettings()
         Button('立即同步')
           .onClick(() => this.syncNow())
+          .width('100%')
+        Button('提醒自检')
+          .onClick(() => this.runReminderDiagnostics())
           .width('100%')
         Button('清空本地缓存')
           .fontColor($r('app.color.danger_text'))
@@ -788,9 +859,10 @@ struct Index {
         Row({ space: 10 }) {
           Row({ space: 10 }) {
             Stack({ alignContent: Alignment.Center }) {
-              Text('▦')
-                .fontSize(20)
-                .fontColor(this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent'))
+              SymbolGlyph($r('sys.symbol.calendar'))
+                .fontSize(21)
+                .fontWeight(FontWeight.Medium)
+                .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .width(42)
             .height(42)
@@ -800,9 +872,10 @@ struct Index {
 
             if (this.hasDue) {
               Stack({ alignContent: Alignment.Center }) {
-                Text('◴')
-                  .fontSize(18)
-                  .fontColor(this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+                SymbolGlyph($r('sys.symbol.clock'))
+                  .fontSize(20)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
               .width(42)
               .height(42)
@@ -812,9 +885,10 @@ struct Index {
             }
 
             Stack({ alignContent: Alignment.Center }) {
-              Text('♪')
-                .fontSize(18)
-                .fontColor(this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+              SymbolGlyph($r('sys.symbol.bell'))
+                .fontSize(20)
+                .fontWeight(FontWeight.Medium)
+                .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .width(42)
             .height(42)
@@ -823,9 +897,10 @@ struct Index {
             .onClick(() => this.showReminderPopup = !this.showReminderPopup)
 
             Stack({ alignContent: Alignment.Center }) {
-              Text('↻')
+              SymbolGlyph($r('sys.symbol.repeat'))
                 .fontSize(20)
-                .fontColor(this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+                .fontWeight(FontWeight.Medium)
+                .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .width(42)
             .height(42)
@@ -1012,9 +1087,10 @@ struct Index {
           Row({ space: 10 }) {
             Row({ space: 10 }) {
               Stack({ alignContent: Alignment.Center }) {
-                Text('▦')
-                  .fontSize(20)
-                  .fontColor(this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent'))
+                SymbolGlyph($r('sys.symbol.calendar'))
+                  .fontSize(21)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
               .width(42)
               .height(42)
@@ -1024,9 +1100,10 @@ struct Index {
 
               if (this.hasDue) {
                 Stack({ alignContent: Alignment.Center }) {
-                  Text('◴')
-                    .fontSize(18)
-                    .fontColor(this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+                  SymbolGlyph($r('sys.symbol.clock'))
+                    .fontSize(20)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
                 }
                 .width(42)
                 .height(42)
@@ -1036,9 +1113,10 @@ struct Index {
               }
 
               Stack({ alignContent: Alignment.Center }) {
-                Text('♪')
-                  .fontSize(18)
-                  .fontColor(this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+                SymbolGlyph($r('sys.symbol.bell'))
+                  .fontSize(20)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
               .width(42)
               .height(42)
@@ -1047,9 +1125,10 @@ struct Index {
               .onClick(() => this.showReminderPopup = !this.showReminderPopup)
 
               Stack({ alignContent: Alignment.Center }) {
-                Text('↻')
+                SymbolGlyph($r('sys.symbol.repeat'))
                   .fontSize(20)
-                  .fontColor(this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent'))
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
               .width(42)
               .height(42)
@@ -1103,20 +1182,27 @@ struct Index {
   }
 
   private loadTaskState(task: TodoTask): void {
-    if (task.due.length > 0) {
-      const match = task.due.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/);
-      if (match) {
-        this.selectedDueDate = new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]));
-        this.selectedDueHour = parseInt(match[4]);
-        this.selectedDueMinute = parseInt(match[5]);
-        this.hasDue = true;
-      }
+    const due = parseDueAsBeijing(task.due);
+    if (due !== undefined) {
+      this.selectedDueDate = new Date(due.year, due.month - 1, due.day);
+      this.selectedDueHour = due.hour;
+      this.selectedDueMinute = due.minute;
+      this.calendarViewDate = new Date(due.year, due.month - 1, 1);
+      this.hasDue = true;
     } else {
+      const now = new Date();
+      this.selectedDueDate = now;
+      this.selectedDueHour = now.getHours();
+      this.selectedDueMinute = now.getMinutes();
+      this.calendarViewDate = new Date(now.getFullYear(), now.getMonth(), 1);
       this.hasDue = false;
     }
-    // Try to restore reminder and repeat from raw ICS
     this.reminderOption = VTodoCodec.detectReminder(task.rawIcs, task.due);
     this.repeatOption = VTodoCodec.detectRepeat(task.rawIcs);
+    this.settingPanel = '';
+    this.showTimePopup = false;
+    this.showReminderPopup = false;
+    this.showRepeatPopup = false;
   }
 
   private async saveEdit(): Promise<void> {
@@ -1124,28 +1210,51 @@ struct Index {
       return;
     }
     if (this.editingTask.title.trim().length === 0) {
-      this.uiContext.getPromptAction().showToast({ message: '请输入待办标题' });
+      this.safeShowToast('请输入待办标题');
       return;
     }
+    const taskId = this.editingTask.id;
+    const title = this.editingTask.title.trim();
+    const description = this.editingTask.description.trim();
+    const due = this.hasDue ? this.formatDueForCalDav() : '';
+    const reminder = this.hasDue ? this.reminderOption : '无';
+    const repeat = this.hasDue ? this.repeatOption : '无';
+
+    this.tasks = this.tasks.map((task: TodoTask) => {
+      if (task.id !== taskId) {
+        return task;
+      }
+      return {
+        id: task.id, uid: task.uid, href: task.href, calendarHref: task.calendarHref,
+        etag: task.etag, title, description, due, priority: task.priority, status: task.status,
+        completedAt: task.completedAt, percentComplete: task.percentComplete, rawIcs: task.rawIcs,
+        syncState: 'pending', updatedAt: Date.now()
+      };
+    });
+    this.showEditSheet = false;
+    this.editingTask = null;
+    this.hasDue = false;
+    this.reminderOption = '无';
+    this.repeatOption = '无';
+    this.statusText = '正在更新';
+
     try {
-      const due = this.hasDue ? this.formatDueForCalDav() : '';
+      if (reminder !== '无') {
+        await this.ensureReminderNotifications(true);
+      }
       await this.syncService.updateTask(
-        this.editingTask.id,
-        this.editingTask.title.trim(),
-        this.editingTask.description.trim(),
+        taskId,
+        title,
+        description,
         due,
-        this.hasDue ? this.reminderOption : '无',
-        this.hasDue ? this.repeatOption : '无'
+        reminder,
+        repeat
       );
-      this.showEditSheet = false;
-      this.editingTask = null;
-      this.hasDue = false;
-      this.reminderOption = '无';
-      this.repeatOption = '无';
       this.statusText = '已更新';
       await this.refreshLists();
     } catch (err) {
-      this.uiContext.getPromptAction().showToast({ message: '更新失败，请重试' });
+      await this.refreshLists();
+      this.safeShowToast('更新失败，请重试');
       this.statusText = `更新失败：${JSON.stringify(err)}`;
     }
   }
@@ -1588,7 +1697,7 @@ struct Index {
       Column() {
         if (this.configured) {
           Row() {
-            Text('待办事项')
+            Text(this.showSettings ? 'Cavdal Tasks' : '待办事项')
               .fontSize(30)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
@@ -1621,7 +1730,7 @@ struct Index {
               .onClick(() => this.showSettings = !this.showSettings)
           }
           .width('100%')
-          .padding({ left: 22, right: 22, top: px2vp(this.statusBarHeight) + 8, bottom: 4 })
+          .padding({ left: 22, right: 22, top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 4 })
 
           if (this.showSearch) {
             TextInput({ placeholder: '搜索待办事项...', text: this.searchQuery })
@@ -1659,6 +1768,7 @@ struct Index {
                 this.SetupView()
               }
               .width('100%')
+              .padding({ top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 24 })
               .backgroundColor($r('app.color.page_background'))
             }
             .width('100%')

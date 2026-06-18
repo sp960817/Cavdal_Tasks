@@ -14,16 +14,34 @@ function parseFormIds(value: string): string[] {
   }
 }
 
+function errorText(err: Object): string {
+  try {
+    return JSON.stringify(err);
+  } catch (_jsonErr) {
+    return `${err}`;
+  }
+}
+
 export class WidgetUpdater {
   private static async formIds(context: common.Context): Promise<string[]> {
-    const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
-    return parseFormIds(`${await pref.get(FORM_IDS_KEY, '[]')}`);
+    try {
+      const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
+      return parseFormIds(`${await pref.get(FORM_IDS_KEY, '[]')}`);
+    } catch (err) {
+      console.error(`[WidgetUpdater] formIds failed: ${errorText(err)}`);
+      return [];
+    }
   }
 
   private static async saveFormIds(context: common.Context, formIds: string[]): Promise<void> {
-    const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
-    await pref.put(FORM_IDS_KEY, JSON.stringify(formIds));
-    await pref.flush();
+    try {
+      const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
+      await pref.put(FORM_IDS_KEY, JSON.stringify(formIds));
+      await pref.flush();
+    } catch (err) {
+      console.error(`[WidgetUpdater] saveFormIds failed: ${errorText(err)}`);
+      throw new Error(`saveFormIds failed: ${errorText(err)}`);
+    }
   }
 
   static async registerForm(context: common.Context, formId: string): Promise<void> {

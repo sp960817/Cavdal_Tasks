@@ -8,17 +8,30 @@ const DOMAIN = 0x0000;
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
 
+  private static errorText(err: Object): string {
+    try {
+      return JSON.stringify(err);
+    } catch (_jsonErr) {
+      return `${err}`;
+    }
+  }
+
   private updateSystemBars(isDark: boolean): void {
     if (this.mainWindow === undefined) {
       return;
     }
     const contentColor = isDark ? '#FFFFFFFF' : '#FF111318';
-    this.mainWindow.setWindowSystemBarProperties({
-      statusBarColor: '#00000000',
-      navigationBarColor: '#00000000',
-      statusBarContentColor: contentColor,
-      navigationBarContentColor: contentColor
-    });
+    try {
+      this.mainWindow.setWindowSystemBarProperties({
+        statusBarColor: '#00000000',
+        navigationBarColor: '#00000000',
+        statusBarContentColor: contentColor,
+        navigationBarContentColor: contentColor
+      });
+    } catch (err) {
+      hilog.error(DOMAIN, 'testTag', 'Failed to update system bars. Cause: %{public}s',
+        EntryAbility.errorText(err));
+    }
   }
 
   private refreshSystemBars(): void {
@@ -49,12 +62,17 @@ export default class EntryAbility extends UIAbility {
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
 
-      this.mainWindow = windowStage.getMainWindowSync();
-      this.mainWindow.setWindowLayoutFullScreen(true);
-      this.refreshSystemBars();
       try {
-        const area = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-        AppStorage.setOrCreate('statusBarHeight', area.topRect.height);
+        this.mainWindow = windowStage.getMainWindowSync();
+        this.mainWindow.setWindowLayoutFullScreen(true);
+        this.refreshSystemBars();
+      } catch (err) {
+        hilog.error(DOMAIN, 'testTag', 'Failed to prepare main window. Cause: %{public}s',
+          EntryAbility.errorText(err));
+      }
+      try {
+        const area = this.mainWindow?.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+        AppStorage.setOrCreate('statusBarHeight', area !== undefined ? area.topRect.height : 0);
       } catch (_err) {
         AppStorage.setOrCreate('statusBarHeight', 0);
       }

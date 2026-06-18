@@ -373,18 +373,18 @@ export class VTodoCodec {
     }
     const dueTotalMin = parseInt(dueMatch[1]) * 60 + parseInt(dueMatch[2]);
     const triggerMin = Math.round(negMs / 60000);
-    const offsetFromDue = dueTotalMin + triggerMin; // positive = before due start
-    if (offsetFromDue <= 0) {
+    if (triggerMin >= 0) {
       return '无';
     }
-    if (offsetFromDue <= 1) {
+    const leadMinutes = -triggerMin;
+    const daysBeforeDueDate = leadMinutes - dueTotalMin;
+    if (Math.abs(daysBeforeDueDate) <= 1) {
       return '当天';
     }
-    // Check if it's approximately 24h before (1440 min)
-    if (offsetFromDue >= 1430 && offsetFromDue <= 1450) {
+    if (Math.abs(daysBeforeDueDate - 1440) <= 1) {
       return '提前一天';
     }
-    if (offsetFromDue >= 10070 && offsetFromDue <= 10090) {
+    if (Math.abs(daysBeforeDueDate - 10080) <= 1) {
       return '提前一周';
     }
     return '无';

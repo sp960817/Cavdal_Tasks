@@ -4,6 +4,7 @@ import { CalDavClient } from '../caldav/CalDavClient';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { AccountSettings, CalendarSource, SyncOperation, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { CredentialStore, SettingsStore, TaskRepository } from '../data/TaskRepository';
+import { ReminderService, ReminderSyncSummary } from '../reminder/ReminderService';
 import { WidgetUpdater } from '../widget/WidgetUpdater';
 
 const LOG_DOMAIN = 0x0000;
@@ -18,10 +19,12 @@ export interface SyncResultSummary {
 export class SyncService {
   private repository: TaskRepository;
   private settings: SettingsStore;
+  private reminderService: ReminderService;
 
   constructor(private context: common.Context) {
     this.repository = new TaskRepository(context);
     this.settings = new SettingsStore(context);
+    this.reminderService = new ReminderService(context);
   }
 
   private async refreshWidgets(): Promise<void> {
@@ -30,6 +33,25 @@ export class SyncService {
     } catch (err) {
       hilog.warn(LOG_DOMAIN, LOG_TAG, 'refreshWidgets failed %{public}s', `${err}`);
     }
+  }
+
+  private async refreshReminders(): Promise<void> {
+    try {
+      const tasks = await this.repository.activeTasks();
+      await this.reminderService.syncTasks(tasks);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, 'refreshReminders failed %{public}s', `${err}`);
+    }
+  }
+
+  async syncLocalReminders(): Promise<void> {
+    await this.refreshReminders();
+  }
+
+  async runReminderDiagnostics(): Promise<string> {
+    const tasks = await this.repository.activeTasks();
+    const summary = await this.reminderService.syncTasks(tasks);
+    return this.formatReminderDiagnostics(summary);
   }
 
   private async getClient(): Promise<{ client: CalDavClient; settings: AccountSettings; ok: boolean }> {
@@ -139,6 +161,7 @@ export class SyncService {
     await this.repository.saveTasks(tasks);
     settings.lastSyncAt = Date.now();
     await this.settings.save(settings);
+    await this.refreshReminders();
     await this.refreshWidgets();
     const summary = `已同步 ${tasks.length} 个待办`;
     const pending = flushErrors > 0 ? `，${flushErrors} 个离线操作待重试` : '';
@@ -167,6 +190,7 @@ export class SyncService {
     if (task.syncState === 'pending') {
       await this.repository.enqueue(this.operationFor(task));
     }
+    await this.refreshReminders();
   }
 
   async setTaskCompleted(taskId: string, done: boolean): Promise<void> {
@@ -178,6 +202,7 @@ export class SyncService {
     updated.syncState = 'pending';
     await this.repository.saveTask(updated);
     await this.repository.enqueue(this.operationFor(updated));
+    await this.refreshReminders();
     await this.refreshWidgets();
     const { client, ok } = await this.getClient();
     if (ok) {
@@ -201,6 +226,7 @@ export class SyncService {
       }
     }
     await this.repository.saveTask(updated);
+    await this.refreshReminders();
     await this.refreshWidgets();
   }
 
@@ -213,11 +239,13 @@ export class SyncService {
     updated.syncState = 'pending';
     await this.repository.saveTask(updated);
     await this.repository.enqueue(this.operationFor(updated));
+    await this.refreshReminders();
     return true;
   }
 
   async clearLocal(): Promise<void> {
     await this.repository.clearTasks();
+    await this.refreshReminders();
   }
 
   private operationFor(task: TodoTask): SyncOperation {
@@ -263,6 +291,7 @@ export class SyncService {
         await this.repository.enqueue(this.makeDeleteOp(taskId, href, etag));
       }
     }
+    await this.refreshReminders();
   }
 
   private makeDeleteOp(taskId: string, href: string, etag: string): SyncOperation {
@@ -284,6 +313,8 @@ export class SyncService {
     }
     const updated = VTodoCodec.updateFields(task, title, description, due, reminder, repeat);
     updated.syncState = 'pending';
+    // Persist first so the UI and offline state do not wait for the network request.
+    await this.repository.saveTask(updated);
     const { client, ok } = await this.getClient();
     if (ok) {
       try {
@@ -296,10 +327,13 @@ export class SyncService {
         // Will remain pending
       }
     }
-    await this.repository.saveTask(updated);
+    if (updated.syncState === 'synced') {
+      await this.repository.saveTask(updated);
+    }
     if (updated.syncState === 'pending') {
       await this.repository.enqueue(this.operationFor(updated));
     }
+    await this.refreshReminders();
   }
 
   private async flushQueue(client: CalDavClient): Promise<number> {
@@ -377,5 +411,39 @@ export class SyncService {
       }
     }
     return failures;
+  }
+
+  private formatReminderDiagnostics(summary: ReminderSyncSummary): string {
+    const lines: string[] = [
+      `通知开关：${summary.notificationsEnabled ? '已开启' : '未开启'}`,
+      `进行中待办：${summary.activeTaskCount}`,
+      `带提醒待办：${summary.reminderTaskCount}`,
+      `发布结果：成功 ${summary.publishedCount} / 跳过 ${summary.skippedCount} / 失败 ${summary.failedCount}`,
+      `系统已注册提醒：${summary.registeredCount}`
+    ];
+    const published = summary.publishResults.filter((item) => item.status !== 'skipped').slice(0, 5);
+    if (published.length > 0) {
+      lines.push('待办提醒：');
+      for (let i = 0; i < published.length; i++) {
+        const item = published[i];
+        lines.push(`- 《${item.title}》 ${item.triggerAt} ${item.detail}`);
+      }
+    }
+    if (summary.registeredResults.length > 0) {
+      lines.push('系统提醒：');
+      for (let i = 0; i < Math.min(summary.registeredResults.length, 5); i++) {
+        lines.push(`- ${summary.registeredResults[i]}`);
+      }
+    }
+    if (summary.errors.length > 0) {
+      lines.push('异常：');
+      for (let i = 0; i < Math.min(summary.errors.length, 3); i++) {
+        lines.push(`- ${summary.errors[i]}`);
+      }
+    }
+    if (summary.reminderTaskCount > 0 && summary.registeredCount === 0) {
+      lines.push('结论：应用有提醒任务，但系统里没有注册成功。');
+    }
+    return lines.join('\n');
   }
 }

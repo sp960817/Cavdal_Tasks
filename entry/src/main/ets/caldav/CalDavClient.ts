@@ -8,6 +8,14 @@ import { CalendarObjectResponse, XmlHelpers } from './XmlHelpers';
 const LOG_DOMAIN = 0x0000;
 const LOG_TAG = 'CavdalHTTP';
 
+function errorText(err: Object): string {
+  try {
+    return JSON.stringify(err);
+  } catch (_jsonErr) {
+    return `${err}`;
+  }
+}
+
 export interface CalDavCredentials {
   serverUrl: string;
   username: string;
@@ -105,6 +113,9 @@ export class CalDavClient {
       }
       hilog.info(LOG_DOMAIN, LOG_TAG, '-> %{public}d %{public}s', Number(response.responseCode), url);
       return response;
+    } catch (err) {
+      hilog.error(LOG_DOMAIN, LOG_TAG, 'Request failed %{public}s %{public}s err=%{public}s', method, url, errorText(err));
+      throw new Error(`${method} ${url} failed: ${errorText(err)}`);
     } finally {
       request.destroy();
     }

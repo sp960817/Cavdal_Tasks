@@ -87,13 +87,16 @@ export function formatDueForDisplay(rawDue: string): string {
   if (due === undefined) {
     return rawDue;
   }
-
   const now = nowInBeijing();
   const delta = dayIndex(due.year, due.month, due.day) - dayIndex(now.year, now.month, now.day);
-  if (delta >= -1 && delta <= 1) {
-    const label = delta === -1 ? '昨天' : delta === 0 ? '今天' : '明天';
+  if (delta >= -2 && delta <= 2) {
+    const label = delta === -2 ? '前天' : delta === -1 ? '昨天' : delta === 0 ? '今天' : delta === 1 ? '明天' : '后天';
     return due.hasTime ? `${label} ${pad(due.hour)}:${pad(due.minute)}` : label;
   }
-
-  return `${due.month}月${due.day}日`;
+  const dateLabel = due.year === now.year
+    ? `${due.month}月${due.day}日`
+    : `${due.year}年${due.month}月${due.day}日`;
+  return due.hasTime
+    ? `${dateLabel} ${pad(due.hour)}:${pad(due.minute)}`
+    : dateLabel;
 }
