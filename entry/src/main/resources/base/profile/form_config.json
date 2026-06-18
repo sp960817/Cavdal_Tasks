@@ -19,7 +19,9 @@
       "defaultDimension": "2*2",
       "updateEnabled": true,
       "updateDuration": 1,
-      "isDynamic": true
+      "isDynamic": true,
+      "transparencyEnabled": true,
+      "renderingMode": "fullColor"
     }
   ]
 }

@@ -52,6 +52,12 @@ export default class EntryAbility extends UIAbility {
       this.mainWindow = windowStage.getMainWindowSync();
       this.mainWindow.setWindowLayoutFullScreen(true);
       this.refreshSystemBars();
+      try {
+        const area = this.mainWindow.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+        AppStorage.setOrCreate('statusBarHeight', area.topRect.height);
+      } catch (_err) {
+        AppStorage.setOrCreate('statusBarHeight', 0);
+      }
     });
   }
 

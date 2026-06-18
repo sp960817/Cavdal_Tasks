@@ -11,7 +11,7 @@ struct Index {
   @State configured: boolean = false;
   @State loading: boolean = true;
   @State refreshing: boolean = false;
-  @State widgetBlurStyle: WidgetBlurStyle = 'regular';
+  @State widgetBlurStyle: WidgetBlurStyle = 'thin';
   @State statusText: string = '正在载入';
   @State serverUrl: string = '';
   @State username: string = '';
@@ -41,6 +41,7 @@ struct Index {
   @State showRepeatPopup: boolean = false;
   @State searchQuery: string = '';
   @State editingTask: TodoTask | null = null;
+  @StorageProp('statusBarHeight') statusBarHeight: number = 0;
 
   private context: common.Context = getContext(this) as common.Context;
   // 统一使用应用级上下文，与桌面小组件共享同一份数据存储
@@ -360,7 +361,7 @@ struct Index {
   }
 
   private widgetBlurLabel(style: WidgetBlurStyle): string {
-    if (style === 'none') return '纯色';
+    if (style === 'none') return '通透';
     if (style === 'thin') return '轻薄';
     if (style === 'thick') return '厚重';
     return '标准';
@@ -417,6 +418,7 @@ struct Index {
         .fontSize(30)
         .fontWeight(FontWeight.Bold)
         .width('100%')
+        .margin({ top: px2vp(this.statusBarHeight) + 28 })
 
       Text('连接支持 CalDAV VTODO 的任务服务，桌面卡片可快速完成待办。')
         .fontSize(15)
@@ -603,7 +605,7 @@ struct Index {
           }, (task: TodoTask) => task.id)
         }
         .width('100%')
-        .scrollBar(BarState.Off)
+        .scrollBar(BarState.Auto)
       }
     }
     .width('100%')
@@ -684,7 +686,8 @@ struct Index {
             }, (task: TodoTask) => task.id)
           }
           .width('100%')
-          .scrollBar(BarState.Off)
+          .height(240)
+          .scrollBar(BarState.Auto)
         }
       }
     }
@@ -705,52 +708,6 @@ struct Index {
   @Builder
   private MainView() {
     Column({ space: 14 }) {
-      Row() {
-        Text('待办事项')
-          .fontSize(30)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-
-        Stack({ alignContent: Alignment.Center }) {
-          Text(this.searchQuery.length > 0 ? '✕' : '🔍')
-            .fontSize(16)
-            .fontColor($r('app.color.text_tertiary'))
-        }
-        .width(38)
-        .height(38)
-        .backgroundColor($r('app.color.icon_background'))
-        .borderRadius(19)
-        .margin({ right: 8 })
-        .onClick(() => {
-            if (this.searchQuery.length > 0) {
-              this.searchQuery = '';
-            } else {
-              this.showSearch = !this.showSearch;
-            }
-          })
-
-        Button(this.showSettings ? '完成' : '设置')
-          .fontSize(14)
-          .fontColor($r('app.color.on_accent'))
-          .backgroundColor($r('app.color.accent'))
-          .borderRadius(18)
-          .height(36)
-          .onClick(() => this.showSettings = !this.showSettings)
-      }
-      .width('100%')
-      .margin({ top: 36, bottom: 4 })
-
-      if (this.showSearch) {
-        TextInput({ placeholder: '搜索待办事项...', text: this.searchQuery })
-          .onChange((value: string) => this.searchQuery = value)
-          .height(44)
-          .fontSize(16)
-          .backgroundColor($r('app.color.surface'))
-          .borderRadius(18)
-          .margin({ bottom: 4 })
-      }
-
       if (this.showSettings) {
         this.SetupView()
         this.WidgetAppearanceSettings()
@@ -767,16 +724,6 @@ struct Index {
         this.ActiveTasksCard()
         this.CompletedTasksCard()
 
-        if (this.completed.length > 5) {
-          Text('查看更多')
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_disabled'))
-            .height(34)
-            .width('100%')
-            .textAlign(TextAlign.Center)
-        }
-
         Text(this.statusText)
           .fontSize(11)
           .fontColor($r('app.color.text_tertiary'))
@@ -784,7 +731,7 @@ struct Index {
           .textAlign(TextAlign.Center)
       }
     }
-    .padding({ left: 22, right: 22, top: 12, bottom: 120 })
+    .padding({ left: 22, right: 22, top: 4, bottom: 120 })
     .width('100%')
   }
 
@@ -1632,29 +1579,99 @@ struct Index {
 
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
-      Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
-        Scroll() {
-          Column() {
-            if (this.configured) {
-              this.MainView()
-            } else {
-              this.SetupView()
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor($r('app.color.page_background'))
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      Column() {
+        if (this.configured) {
+          Row() {
+            Text('待办事项')
+              .fontSize(30)
+              .fontWeight(FontWeight.Bold)
+              .fontColor($r('app.color.text_primary'))
+              .layoutWeight(1)
+
+            Stack({ alignContent: Alignment.Center }) {
+              Text(this.searchQuery.length > 0 ? '✕' : '🔍')
+                .fontSize(16)
+                .fontColor($r('app.color.text_tertiary'))
             }
+            .width(38)
+            .height(38)
+            .backgroundColor($r('app.color.icon_background'))
+            .borderRadius(19)
+            .margin({ right: 8 })
+            .onClick(() => {
+              if (this.searchQuery.length > 0) {
+                this.searchQuery = '';
+              } else {
+                this.showSearch = !this.showSearch;
+              }
+            })
+
+            Button(this.showSettings ? '完成' : '设置')
+              .fontSize(14)
+              .fontColor($r('app.color.on_accent'))
+              .backgroundColor($r('app.color.accent'))
+              .borderRadius(18)
+              .height(36)
+              .onClick(() => this.showSettings = !this.showSettings)
           }
           .width('100%')
-          .height('100%')
-          .backgroundColor($r('app.color.page_background'))
+          .padding({ left: 22, right: 22, top: px2vp(this.statusBarHeight) + 8, bottom: 4 })
+
+          if (this.showSearch) {
+            TextInput({ placeholder: '搜索待办事项...', text: this.searchQuery })
+              .onChange((value: string) => this.searchQuery = value)
+              .height(44)
+              .fontSize(16)
+              .backgroundColor($r('app.color.surface'))
+              .borderRadius(18)
+              .margin({ left: 22, right: 22, bottom: 4 })
+          }
+
+          Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
+            Scroll() {
+              Column() {
+                this.MainView()
+              }
+              .width('100%')
+              .backgroundColor($r('app.color.page_background'))
+            }
+            .width('100%')
+            .scrollBar(BarState.Auto)
+            .align(Alignment.TopStart)
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .pullToRefresh(this.configured && !this.showSettings)
+          .refreshOffset(64)
+          .onRefreshing(() => {
+            this.refreshFromPull();
+          })
+        } else {
+          Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
+            Scroll() {
+              Column() {
+                this.SetupView()
+              }
+              .width('100%')
+              .backgroundColor($r('app.color.page_background'))
+            }
+            .width('100%')
+            .scrollBar(BarState.Auto)
+            .align(Alignment.TopStart)
+          }
+          .layoutWeight(1)
+          .width('100%')
+          .pullToRefresh(false)
         }
-        .height('100%')
-        .width('100%')
       }
-      .height('100%')
       .width('100%')
-      .pullToRefresh(this.configured && !this.showSettings)
-      .refreshOffset(64)
-      .onRefreshing(() => {
-        this.refreshFromPull();
-      })
+      .height('100%')
 
       if (this.configured && !this.showSettings) {
         Button('+')

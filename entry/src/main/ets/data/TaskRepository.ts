@@ -23,7 +23,7 @@ function widgetBlurStyle(value: string): WidgetBlurStyle {
   if (value === 'none' || value === 'thin' || value === 'thick') {
     return value;
   }
-  return 'regular';
+  return 'thin';
 }
 
 function encode(value: string): Uint8Array {
@@ -103,7 +103,7 @@ export class SettingsStore {
       calendarHref: `${await pref.get('calendarHref', '')}`,
       calendarName: `${await pref.get('calendarName', '')}`,
       lastSyncAt: Number(await pref.get('lastSyncAt', 0)),
-      widgetBlurStyle: widgetBlurStyle(`${await pref.get('widgetBlurStyle', 'regular')}`)
+      widgetBlurStyle: widgetBlurStyle(`${await pref.get('widgetBlurStyle', 'thin')}`)
     };
   }
 
@@ -203,7 +203,7 @@ export class TaskRepository {
   }
 
   async completedTasks(limit: number = 20): Promise<TodoTask[]> {
-    return this.queryTasks('SELECT * FROM tasks WHERE status = ? ORDER BY updated_at DESC LIMIT ?', ['COMPLETED', limit]);
+    return this.queryTasks('SELECT * FROM tasks WHERE status = ? ORDER BY completed_at DESC LIMIT ?', ['COMPLETED', limit]);
   }
 
   async pendingCount(): Promise<number> {

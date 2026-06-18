@@ -22,7 +22,7 @@ interface FormMessageParams {
 }
 
 const EMPTY_SETTINGS: AccountSettings = {
-  serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'regular'
+  serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin'
 };
 
 const EMPTY_PAYLOAD: WidgetPayload = {
@@ -93,7 +93,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
       tasksJson: '[]',
       pendingCount: '0',
       lastSyncText: '载入中',
-      widgetBlurStyle: 'regular'
+      widgetBlurStyle: 'thin'
     });
   }
 
@@ -128,8 +128,10 @@ export default class EntryFormAbility extends FormExtensionAbility {
       syncService.setTaskCompleted(taskId, true).then(() => {
         return this.createData();
       }).then((data: formBindingData.FormBindingData) => {
-        formProvider.updateForm(formId, data);
-        hilog.info(LOG_DOMAIN, LOG_TAG, 'onFormEvent complete ok id=%{public}s', formId);
+        setTimeout(() => {
+          formProvider.updateForm(formId, data);
+          hilog.info(LOG_DOMAIN, LOG_TAG, 'onFormEvent complete ok id=%{public}s', formId);
+        }, 700);
       }).catch((err: Object) => {
         hilog.error(LOG_DOMAIN, LOG_TAG, 'onFormEvent complete failed %{public}s', `${err}`);
       });

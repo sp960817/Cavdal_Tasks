@@ -38,7 +38,7 @@ export class SyncService {
       settings = await this.settings.load();
     } catch (err) {
       return { client: undefined as unknown as CalDavClient, settings: {
-        serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'regular'
+        serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin'
       } as AccountSettings, ok: false };
     }
     let password = '';
