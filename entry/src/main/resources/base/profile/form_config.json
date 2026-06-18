@@ -1,0 +1,25 @@
+{
+  "forms": [
+    {
+      "name": "TodoWidget",
+      "displayName": "Cavdal 待办",
+      "description": "CalDAV 待办事项",
+      "src": "./ets/widget/WidgetCard.ets",
+      "uiSyntax": "arkts",
+      "window": {
+        "designWidth": 720,
+        "autoDesignWidth": true
+      },
+      "colorMode": "auto",
+      "isDefault": true,
+      "supportDimensions": [
+        "2*2",
+        "2*4"
+      ],
+      "defaultDimension": "2*2",
+      "updateEnabled": true,
+      "updateDuration": 1,
+      "isDynamic": true
+    }
+  ]
+}

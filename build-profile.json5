@@ -1,0 +1,56 @@
+{
+  "app": {
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B5D3859B42E8582731640855C931F36D328DD4252D88B48FD1554752DD5C000F48CFBBD76D5E95D",
+          "profile": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.p12",
+          "storePassword": "0000001B18932E203E4EB8EA8A59F61C65610F397EAC3C8499D555FEB45C98B6D75AF88E0EF4095DE787E4"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "default",
+        "signingConfig": "default",
+        "targetSdkVersion": "6.1.1(24)",
+        "compatibleSdkVersion": "6.1.1(24)",
+        "runtimeOS": "HarmonyOS",
+        "buildOption": {
+          "strictMode": {
+            "caseSensitiveCheck": true,
+            "useNormalizedOHMUrl": true
+          }
+        }
+      }
+    ],
+    "buildModeSet": [
+      {
+        "name": "debug",
+      },
+      {
+        "name": "release"
+      }
+    ]
+  },
+  "modules": [
+    {
+      "name": "entry",
+      "srcPath": "./entry",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
+    }
+  ]
+}

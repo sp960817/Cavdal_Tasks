@@ -1,0 +1,32 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Cavdal Tasks"
+    },
+    {
+      "name": "EntryFormAbility_label",
+      "value": "Todo"
+    },
+    {
+      "name": "EntryFormAbility_desc",
+      "value": "CalDAV todo widget"
+    },
+    {
+      "name": "widget_todo_name",
+      "value": "Todo"
+    },
+    {
+      "name": "widget_todo_desc",
+      "value": "Quickly complete CalDAV tasks"
+    }
+  ]
+}

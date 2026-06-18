@@ -1,0 +1,32 @@
+{
+  "color": [
+    { "name": "start_window_background", "value": "#0F1115" },
+    { "name": "page_background", "value": "#0F1115" },
+    { "name": "surface", "value": "#1A1D23" },
+    { "name": "surface_translucent", "value": "#1A1D23" },
+    { "name": "surface_input", "value": "#252932" },
+    { "name": "surface_subtle", "value": "#21252D" },
+    { "name": "text_primary", "value": "#F3F5F7" },
+    { "name": "text_secondary", "value": "#B9C0CA" },
+    { "name": "text_tertiary", "value": "#8C95A3" },
+    { "name": "text_disabled", "value": "#606977" },
+    { "name": "divider", "value": "#343A45" },
+    { "name": "accent", "value": "#6B8DFF" },
+    { "name": "accent_soft", "value": "#25345F" },
+    { "name": "on_accent", "value": "#FFFFFF" },
+    { "name": "icon_background", "value": "#26FFFFFF" },
+    { "name": "overlay", "value": "#99000000" },
+    { "name": "danger", "value": "#FF625B" },
+    { "name": "danger_text", "value": "#FF8A83" },
+    { "name": "warning_text", "value": "#E7B85C" },
+    { "name": "success", "value": "#38D7A9" },
+    { "name": "shadow", "value": "#80000000" },
+    { "name": "widget_background", "value": "#151D27" },
+    { "name": "widget_item", "value": "#25313E" },
+    { "name": "widget_glass_item", "value": "#B025313E" },
+    { "name": "widget_text", "value": "#F1F5F9" },
+    { "name": "widget_secondary", "value": "#9EADBD" },
+    { "name": "widget_circle", "value": "#76A3FF" },
+    { "name": "transparent", "value": "#00FFFFFF" }
+  ]
+}
