@@ -45,19 +45,19 @@ struct Index {
   @StorageProp('statusBarHeight') statusBarHeight: number = 0;
 
   private uiContext: UIContext = this.getUIContext();
-  private context: common.Context = this.requireHostContext();
+  private context: common.UIAbilityContext = this.requireHostContext();
   // 统一使用应用级上下文，与桌面小组件共享同一份数据存储
   private repository: TaskRepository = new TaskRepository(this.context.getApplicationContext());
   private syncService: SyncService = new SyncService(this.context.getApplicationContext());
   private firstPageShow: boolean = true;
   private reminderNotificationPrompted: boolean = false;
 
-  private requireHostContext(): common.Context {
+  private requireHostContext(): common.UIAbilityContext {
     const hostContext = this.uiContext.getHostContext();
     if (hostContext === undefined) {
       throw new Error('无法获取页面 Host Context');
     }
-    return hostContext as common.Context;
+    return hostContext as common.UIAbilityContext;
   }
 
   private safeShowToast(message: string): void {
@@ -83,7 +83,7 @@ struct Index {
         return false;
       }
       this.reminderNotificationPrompted = true;
-      await notificationManager.requestEnableNotification(this.context as never);
+      await notificationManager.requestEnableNotification(this.context);
       const rechecked = await notificationManager.isNotificationEnabled();
       if (rechecked) {
         this.safeShowToast('已开启应用通知');
