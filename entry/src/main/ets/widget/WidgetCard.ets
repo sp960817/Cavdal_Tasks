@@ -5,15 +5,6 @@ interface CardTask {
   syncState: string;
 }
 
-interface GlassToken {
-  cardBg: string;
-  blur: BlurStyle;
-  border: string;
-  shadowColor: string;
-  highlight: string;
-  lowlight: string;
-}
-
 function parseTasks(value: string): CardTask[] {
   try {
     return JSON.parse(value) as CardTask[];
@@ -22,29 +13,24 @@ function parseTasks(value: string): CardTask[] {
   }
 }
 
-function glassToken(style: string): GlassToken {
-  if (style === 'none') {
-    return {
-      cardBg: '#00000000', blur: BlurStyle.NONE, border: '#00FFFFFF', shadowColor: '#00000000',
-      highlight: '#00FFFFFF', lowlight: '#00000000'
-    };
+function blurStyleFor(style: string): BlurStyle {
+  if (style === 'thin') {
+    return BlurStyle.BACKGROUND_THIN;
   }
   if (style === 'regular') {
-    return {
-      cardBg: '#14FFFFFF', blur: BlurStyle.BACKGROUND_REGULAR, border: '#52FFFFFF', shadowColor: '#20000000',
-      highlight: '#30FFFFFF', lowlight: '#08000000'
-    };
+    return BlurStyle.BACKGROUND_REGULAR;
   }
   if (style === 'thick') {
-    return {
-      cardBg: '#24FFFFFF', blur: BlurStyle.BACKGROUND_THICK, border: '#68FFFFFF', shadowColor: '#28000000',
-      highlight: '#42FFFFFF', lowlight: '#0D000000'
-    };
+    return BlurStyle.BACKGROUND_THICK;
   }
-  return {
-    cardBg: '#0CFFFFFF', blur: BlurStyle.BACKGROUND_THIN, border: '#3DFFFFFF', shadowColor: '#16000000',
-    highlight: '#24FFFFFF', lowlight: '#05000000'
-  };
+  return BlurStyle.NONE;
+}
+
+function opaqueColor(color: string): string {
+  if (color.length === 9 && color.startsWith('#')) {
+    return `#FF${color.slice(3)}`;
+  }
+  return color;
 }
 
 let storage = new LocalStorage();
@@ -55,11 +41,18 @@ struct WidgetCard {
   @LocalStorageProp('tasksJson') tasksJson: string = '[]';
   @LocalStorageProp('pendingCount') pendingCount: string = '0';
   @LocalStorageProp('lastSyncText') lastSyncText: string = '未同步';
-  @LocalStorageProp('widgetBlurStyle') widgetBlurStyle: string = 'thin';
+  @LocalStorageProp('widgetBlurStyle') @Watch('onBlurStyleChange') widgetBlurStyle: string = 'thin';
+  @LocalStorageProp('textColor') @Watch('onTextColorChange') textColor: string = '#E6000000';
   @State completingId: string = '';
 
-  private token(): GlassToken {
-    return glassToken(this.widgetBlurStyle);
+  private onTextColorChange(): void {
+  }
+
+  private onBlurStyleChange(): void {
+  }
+
+  private tc(): string {
+    return opaqueColor(this.textColor);
   }
 
   private completeTask(task: CardTask): void {
@@ -93,12 +86,13 @@ struct WidgetCard {
         Column({ space: 5 }) {
           Text('今日清爽')
             .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.widget_text_primary'))
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.tc())
             .textAlign(TextAlign.Center)
           Text(this.lastSyncText)
             .fontSize(10)
-            .fontColor($r('app.color.widget_text_secondary'))
+            .fontColor(this.tc())
+            .opacity(0.75)
             .textAlign(TextAlign.Center)
         }
         .layoutWeight(1)
@@ -115,9 +109,9 @@ struct WidgetCard {
                     .width(18)
                     .height(18)
                     .borderRadius(9)
-                    .border({ width: 1.5, color: $r('app.color.widget_check_border') })
+                    .border({ width: 1.8, color: this.tc() })
                     .backgroundColor(this.completingId === task.id ?
-                      $r('app.color.widget_check_fill') : '#00000000')
+                      this.tc() : '#00000000')
                     .animation({ duration: 400, curve: Curve.EaseOut })
 
                   Text('✓')
@@ -137,9 +131,8 @@ struct WidgetCard {
 
                 Text(task.title)
                   .fontSize(14)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(this.completingId === task.id ?
-                    $r('app.color.widget_text_secondary') : $r('app.color.widget_text_primary'))
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(this.tc())
                   .opacity(this.completingId === task.id ? 0 : 1)
                   .animation({ duration: 600, curve: Curve.EaseOut })
                   .maxLines(1)
@@ -163,18 +156,8 @@ struct WidgetCard {
     .width('100%')
     .height('100%')
     .padding(16)
-    .backgroundColor(this.token().cardBg)
-    .backgroundBlurStyle(this.token().blur)
-    .linearGradient({
-      angle: 135,
-      colors: [
-        [this.token().highlight, 0],
-        ['#00FFFFFF', 0.48],
-        [this.token().lowlight, 1]
-      ]
-    })
-    .border({ width: 1, color: this.token().border })
-    .shadow({ radius: 18, color: this.token().shadowColor, offsetY: 5 })
+    .backgroundColor(Color.Transparent)
+    .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
     .onClick(() => this.openApp())
   }
 }

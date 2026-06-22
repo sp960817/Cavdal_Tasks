@@ -18,8 +18,7 @@
       "updateEnabled": true,
       "updateDuration": 1,
       "renderingMode": "fullColor",
-      "transparencyEnabled": true,
-      "enableBlurBackground": true
+      "transparencyEnabled": true
     }
   ]
 }

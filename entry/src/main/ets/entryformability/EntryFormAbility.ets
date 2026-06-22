@@ -21,6 +21,11 @@ interface FormMessageParams {
   taskId?: string;
 }
 
+interface TextColor {
+  mTextColor: string;
+  mWallpaperType: number;
+}
+
 const EMPTY_SETTINGS: AccountSettings = {
   serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin'
 };
@@ -29,8 +34,23 @@ const EMPTY_PAYLOAD: WidgetPayload = {
   tasks: [], pendingCount: 0, lastSyncText: '读取失败'
 };
 
+const DEFAULT_TEXT_COLOR: string = '#80000000';
+
+function extractTextColor(params: Record<string, Object> | undefined): string {
+  if (!params) {
+    return DEFAULT_TEXT_COLOR;
+  }
+  const colorInfo = params[formInfo.FormParam.HOST_BG_INVERSE_COLOR_KEY] as TextColor;
+  if (!colorInfo) {
+    hilog.warn(LOG_DOMAIN, LOG_TAG, 'no host_bg_inverse_color in params');
+    return DEFAULT_TEXT_COLOR;
+  }
+  hilog.info(LOG_DOMAIN, LOG_TAG, 'inverse color=%{public}s', colorInfo.mTextColor);
+  return colorInfo.mTextColor;
+}
+
 export default class EntryFormAbility extends FormExtensionAbility {
-  private async createData(): Promise<formBindingData.FormBindingData> {
+  private async createData(textColor?: string): Promise<formBindingData.FormBindingData> {
     // 使用应用级上下文与主应用共享数据存储
     const appCtx = this.context.getApplicationContext();
     const syncService = new SyncService(appCtx);
@@ -55,6 +75,9 @@ export default class EntryFormAbility extends FormExtensionAbility {
       'lastSyncText': payload.lastSyncText,
       'widgetBlurStyle': settings.widgetBlurStyle
     };
+    if (textColor !== undefined) {
+      bindingData['textColor'] = textColor;
+    }
     hilog.info(LOG_DOMAIN, LOG_TAG, 'createData done tasksJson=%{public}s', bindingData['tasksJson']);
     // createFormBindingData 接收一个对象，系统会自动包装为 FormBindingData
     return formBindingData.createFormBindingData(bindingData);
@@ -62,6 +85,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
 
   onAddForm(want: Want): formBindingData.FormBindingData {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'onAddForm called');
+    const textColor = extractTextColor(want.parameters as Record<string, Object> | undefined);
     try {
       const params = want.parameters as Record<string, Object> | undefined;
       let rawId: Object | undefined = undefined;
@@ -79,7 +103,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
       if (formId.length > 0) {
         WidgetUpdater.registerForm(this.context.getApplicationContext(), formId).catch(() => {
         });
-        this.createData().then((data: formBindingData.FormBindingData) => {
+        this.createData(textColor).then((data: formBindingData.FormBindingData) => {
           formProvider.updateForm(formId, data);
           hilog.info(LOG_DOMAIN, LOG_TAG, 'onAddForm updateForm ok id=%{public}s', formId);
         }).catch((err: Object) => {
@@ -93,18 +117,20 @@ export default class EntryFormAbility extends FormExtensionAbility {
       tasksJson: '[]',
       pendingCount: '0',
       lastSyncText: '载入中',
-      widgetBlurStyle: 'thin'
+      widgetBlurStyle: 'thin',
+      textColor: textColor
     });
   }
 
-  onUpdateForm(formId: string): void {
+  onUpdateForm(formId: string, wantParams?: Record<string, Object>): void {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'onUpdateForm id=%{public}s', formId);
+    const textColor = extractTextColor(wantParams);
     WidgetUpdater.registerForm(this.context.getApplicationContext(), formId).catch(() => {
     });
     const appCtx = this.context.getApplicationContext();
     new SyncService(appCtx).syncNow().catch((err: Object) => {
       hilog.warn(LOG_DOMAIN, LOG_TAG, 'onUpdateForm sync failed %{public}s', `${err}`);
-    }).then(() => this.createData()).then((data: formBindingData.FormBindingData) => {
+    }).then(() => this.createData(textColor !== DEFAULT_TEXT_COLOR ? textColor : undefined)).then((data: formBindingData.FormBindingData) => {
       formProvider.updateForm(formId, data);
       hilog.info(LOG_DOMAIN, LOG_TAG, 'onUpdateForm updateForm ok id=%{public}s', formId);
     }).catch((err: Object) => {
