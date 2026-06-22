@@ -217,6 +217,9 @@ export class ReminderService {
   }
 
   private buildReminderRequest(task: TodoTask): PreparedReminderRequest {
+    if (task.status === 'COMPLETED') {
+      return { triggerAt: '-', skipReason: '已完成' };
+    }
     const due = parseDueAsBeijing(task.due);
     if (due === undefined) {
       return { triggerAt: '-', skipReason: '截止时间无效' };

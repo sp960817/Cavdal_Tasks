@@ -3,6 +3,7 @@ interface CardTask {
   title: string;
   due: string;
   syncState: string;
+  hasReminder: boolean;
 }
 
 function parseTasks(value: string): CardTask[] {
@@ -137,9 +138,16 @@ struct WidgetCard {
                   .animation({ duration: 600, curve: Curve.EaseOut })
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width('100%')
                   .layoutWeight(1)
                   .onClick(() => this.openApp())
+
+                if (task.hasReminder) {
+                  SymbolGlyph($r('sys.symbol.bell'))
+                    .fontSize(11)
+                    .fontColor([this.tc()])
+                    .opacity(this.completingId === task.id ? 0 : 0.85)
+                    .animation({ duration: 600, curve: Curve.EaseOut })
+                }
               }
               .width('100%')
               .height(30)

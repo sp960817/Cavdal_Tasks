@@ -577,6 +577,12 @@ struct Index {
             .fontSize(14)
             .fontColor($r('app.color.accent'))
         }
+
+        if (VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无') {
+          SymbolGlyph($r('sys.symbol.bell'))
+            .fontSize(14)
+            .fontColor([$r('app.color.accent')])
+        }
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)

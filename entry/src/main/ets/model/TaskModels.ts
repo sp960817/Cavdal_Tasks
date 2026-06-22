@@ -50,6 +50,7 @@ export interface WidgetTask {
   title: string;
   due: string;
   syncState: SyncState;
+  hasReminder: boolean;
 }
 
 export interface WidgetPayload {

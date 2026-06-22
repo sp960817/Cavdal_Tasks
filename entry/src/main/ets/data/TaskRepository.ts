@@ -2,6 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { preferences, relationalStore } from '@kit.ArkData';
 import asset from '@ohos.security.asset';
 import { AccountSettings, CalendarSource, SyncOperation, TodoTask, WidgetBlurStyle, WidgetPayload, WidgetTask } from '../model/TaskModels';
+import { VTodoCodec } from '../caldav/VTodoCodec';
 
 const DB_NAME = 'cavdal_tasks.db';
 const PREF_NAME = 'cavdal_settings';
@@ -503,7 +504,8 @@ export class TaskRepository {
       id: task.id,
       title: task.title,
       due: task.due,
-      syncState: task.syncState
+      syncState: task.syncState,
+      hasReminder: VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无'
     }));
     return {
       tasks,
