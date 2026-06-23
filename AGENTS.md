@@ -56,3 +56,34 @@
 - 新增组件优先放在项目现有 components/common 目录约定中。
 - 修改前先说明会改哪些文件。
 - 修改后给出验证方式，例如构建、预览、单元测试或手动验证步骤。
+
+## 构建与安装
+
+### 构建 HAP
+
+在项目根目录执行（需设置 DevEco Studio 自带的 JDK / Node / SDK 环境变量）：
+
+```bash
+PATH=/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home/bin:/Applications/DevEco-Studio.app/Contents/tools/node/bin:$PATH \
+JAVA_HOME=/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home \
+NODE_HOME=/Applications/DevEco-Studio.app/Contents/tools/node \
+DEVECO_SDK_HOME=/Applications/DevEco-Studio.app/Contents/sdk \
+/Applications/DevEco-Studio.app/Contents/tools/hvigor/bin/hvigorw \
+  --no-daemon --mode module -p module=entry@default -p product=default assembleHap
+```
+
+- 注意 `DEVECO_SDK_HOME` 指向 `.../Contents/sdk`（其下有 `default` 子目录），不要直接指向 `.../Contents/sdk/default`，否则会报 `SDK component missing`。
+- 产物路径：`entry/build/default/outputs/default/entry-default-signed.hap`（已签名）。
+
+### 安装到手机
+
+通过 hdc 安装到已连接设备（设备 ID：`5MT0226210000760`）：
+
+```bash
+/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc \
+  -t 5MT0226210000760 install -r \
+  entry/build/default/outputs/default/entry-default-signed.hap
+```
+
+- 用 `hdc list targets` 查看已连接设备。
+- HDC 服务经常中断，中断后重启 hdc 服务或重连设备即可恢复安装。
