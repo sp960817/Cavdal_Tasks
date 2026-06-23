@@ -1,12 +1,23 @@
 import { common } from '@kit.AbilityKit';
+import { preferences } from '@kit.ArkData';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import reminderAgentManager from '@ohos.reminderAgentManager';
 import notificationManager from '@ohos.notificationManager';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { TodoTask } from '../model/TaskModels';
+import { TaskRepository } from '../data/TaskRepository';
+import { WidgetUpdater } from '../widget/WidgetUpdater';
 
 const REMINDER_SLOT_TYPE = notificationManager.SlotType.SERVICE_INFORMATION;
 const ALL_DAYS_OF_WEEK: number[] = [1, 2, 3, 4, 5, 6, 7];
+const BUNDLE_NAME = 'com.example.cavdal_tasks';
+const ENTRY_ABILITY = 'EntryAbility';
+const REMINDER_RING_DURATION = 5;
+const REMINDER_MAP_PREF = 'cavdal_reminder_map';
+const REMINDER_MAP_KEY = 'reminderIdToTaskId';
+const LOG_DOMAIN = 0x0000;
+const LOG_TAG = 'CavdalReminder';
 
 export interface ReminderPublishResult {
   taskId: string;
@@ -136,6 +147,7 @@ export class ReminderService {
     }
     try {
       const reminderId = await reminderAgentManager.publishReminder(prepared.request);
+      await ReminderService.addReminderMapping(this.context, reminderId, task.id);
       return {
         taskId: task.id,
         title: task.title,
@@ -151,6 +163,7 @@ export class ReminderService {
         try {
           await this.clearAllReminders();
           const reminderId = await reminderAgentManager.publishReminder(prepared.request);
+          await ReminderService.addReminderMapping(this.context, reminderId, task.id);
           return {
             taskId: task.id,
             title: task.title,
@@ -199,6 +212,7 @@ export class ReminderService {
     } catch (err) {
       console.error(`[ReminderService] cancelAllReminders failed: ${errorText(err)}`);
     }
+    await ReminderService.clearReminderMap(this.context);
   }
 
   private async countValidReminders(): Promise<number> {
@@ -246,7 +260,25 @@ export class ReminderService {
       expiredContent: task.title,
       notificationId: this.notificationId(task.id),
       slotType: REMINDER_SLOT_TYPE,
+      ringDuration: REMINDER_RING_DURATION,
+      ringChannel: reminderAgentManager.RingChannel.RING_CHANNEL_NOTIFICATION,
+      snoozeTimes: 0,
+      timeInterval: 0,
       tapDismissed: true,
+      actionButton: [
+        {
+          title: '完成',
+          type: reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_SNOOZE
+        },
+        {
+          title: '知道了',
+          type: reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_CLOSE
+        }
+      ],
+      wantAgent: {
+        pkgName: BUNDLE_NAME,
+        abilityName: ENTRY_ABILITY
+      },
       dateTime: {
         year: triggerDate.getFullYear(),
         month: triggerDate.getMonth() + 1,
@@ -348,5 +380,105 @@ export class ReminderService {
   private describeRegisteredReminder(item: reminderAgentManager.ReminderInfo): string {
     const request = item.reminderReq as reminderAgentManager.ReminderRequestCalendar;
     return `#${item.reminderId} ${request.title ?? '未命名提醒'} @ ${this.formatLocalDateTime(request.dateTime)}`;
+  }
+
+  private static async loadReminderMap(context: common.Context): Promise<Record<string, string>> {
+    try {
+      const pref = await preferences.getPreferences(context, REMINDER_MAP_PREF);
+      const raw = `${await pref.get(REMINDER_MAP_KEY, '{}')}`;
+      return JSON.parse(raw) as Record<string, string>;
+    } catch (err) {
+      hilog.error(LOG_DOMAIN, LOG_TAG, 'loadReminderMap failed: %{public}s', errorText(err));
+      return {};
+    }
+  }
+
+  private static async saveReminderMap(context: common.Context, map: Record<string, string>): Promise<void> {
+    try {
+      const pref = await preferences.getPreferences(context, REMINDER_MAP_PREF);
+      await pref.put(REMINDER_MAP_KEY, JSON.stringify(map));
+      await pref.flush();
+    } catch (err) {
+      hilog.error(LOG_DOMAIN, LOG_TAG, 'saveReminderMap failed: %{public}s', errorText(err));
+    }
+  }
+
+  private static async addReminderMapping(context: common.Context, reminderId: number, taskId: string): Promise<void> {
+    const map = await ReminderService.loadReminderMap(context);
+    map[`${reminderId}`] = taskId;
+    await ReminderService.saveReminderMap(context, map);
+  }
+
+  private static async removeReminderMapping(context: common.Context, reminderId: number): Promise<void> {
+    const map = await ReminderService.loadReminderMap(context);
+    delete map[`${reminderId}`];
+    await ReminderService.saveReminderMap(context, map);
+  }
+
+  private static async clearReminderMap(context: common.Context): Promise<void> {
+    await ReminderService.saveReminderMap(context, {});
+  }
+
+  static async subscribeReminderActions(context: common.Context): Promise<void> {
+    try {
+      await reminderAgentManager.subscribeReminderState(async (states: Array<reminderAgentManager.ReminderState>) => {
+        for (let i = 0; i < states.length; i++) {
+          const state = states[i];
+          if (state.buttonType === reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_SNOOZE) {
+            await ReminderService.handleCompleteAction(context, state.reminderId);
+          }
+        }
+      });
+      hilog.info(LOG_DOMAIN, LOG_TAG, 'subscribeReminderState ok');
+    } catch (err) {
+      hilog.error(LOG_DOMAIN, LOG_TAG, 'subscribeReminderState failed: %{public}s', errorText(err));
+    }
+  }
+
+  private static async handleCompleteAction(context: common.Context, reminderId: number): Promise<void> {
+    try {
+      const map = await ReminderService.loadReminderMap(context);
+      const taskId = map[`${reminderId}`];
+      if (taskId === undefined) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, 'no task mapping for reminderId=%{public}d', reminderId);
+        return;
+      }
+      const repository = new TaskRepository(context);
+      const task = await repository.getTask(taskId);
+      if (task === undefined) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, 'task not found taskId=%{public}s', taskId);
+        return;
+      }
+      if (task.status === 'COMPLETED') {
+        hilog.info(LOG_DOMAIN, LOG_TAG, 'task already completed taskId=%{public}s', taskId);
+        return;
+      }
+      const updated = VTodoCodec.setCompletion(task, true);
+      updated.syncState = 'pending';
+      await repository.saveTask(updated);
+      await repository.enqueue({
+        id: `${task.id}-${Date.now()}`,
+        taskId: task.id,
+        type: 'put',
+        payload: updated.rawIcs,
+        createdAt: Date.now(),
+        attempts: 0,
+        lastError: ''
+      });
+      try {
+        await reminderAgentManager.cancelReminder(reminderId);
+      } catch (err) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, 'cancelReminder failed: %{public}s', errorText(err));
+      }
+      await ReminderService.removeReminderMapping(context, reminderId);
+      try {
+        await WidgetUpdater.updateAllForms(context);
+      } catch (err) {
+        hilog.warn(LOG_DOMAIN, LOG_TAG, 'updateAllForms failed: %{public}s', errorText(err));
+      }
+      hilog.info(LOG_DOMAIN, LOG_TAG, 'task marked complete via reminder taskId=%{public}s', taskId);
+    } catch (err) {
+      hilog.error(LOG_DOMAIN, LOG_TAG, 'handleCompleteAction failed: %{public}s', errorText(err));
+    }
   }
 }
