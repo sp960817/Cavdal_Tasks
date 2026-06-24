@@ -34,7 +34,7 @@ struct Index {
   @State showTimePopup: boolean = false;
   @State showAddSheet: boolean = false;
   @State showDueSheet: boolean = false;
-  @State showSettings: boolean = false;
+  @State selectedTabIndex: number = 0;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
   @State showCompleted: boolean = true;
@@ -171,7 +171,7 @@ struct Index {
     try {
       await this.syncService.saveAccount(this.serverUrl, this.username, this.password, this.calendars[this.selectedCalendarIndex]);
       this.configured = true;
-      this.showSettings = false;
+      this.selectedTabIndex = 0;
       this.statusText = '账号已保存';
       await this.syncNow();
     } catch (err) {
@@ -200,7 +200,7 @@ struct Index {
   }
 
   private async refreshFromPull(): Promise<void> {
-    if (!this.configured || this.showSettings || this.loading) {
+    if (!this.configured || this.selectedTabIndex !== 0 || this.loading) {
       this.refreshing = false;
       return;
     }
@@ -779,30 +779,35 @@ struct Index {
   }
 
   @Builder
-  private MainView() {
+  private SettingsView() {
     Column({ space: 14 }) {
-      if (this.showSettings) {
-        this.ServerSettingsMenu()
-        this.WidgetAppearanceSettings()
-        Button('立即同步')
-          .onClick(() => this.syncNow())
-          .width('100%')
-        Button('清空本地缓存')
-          .fontColor($r('app.color.danger_text'))
-          .backgroundColor($r('app.color.surface'))
-          .borderRadius(22)
-          .onClick(() => this.clearLocal())
-          .width('100%')
-      } else {
-        this.ActiveTasksCard()
-        this.CompletedTasksCard()
+      this.ServerSettingsMenu()
+      this.WidgetAppearanceSettings()
+      Button('立即同步')
+        .onClick(() => this.syncNow())
+        .width('100%')
+      Button('清空本地缓存')
+        .fontColor($r('app.color.danger_text'))
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(22)
+        .onClick(() => this.clearLocal())
+        .width('100%')
+    }
+    .padding({ left: 22, right: 22, top: 4, bottom: 120 })
+    .width('100%')
+  }
 
-        Text(this.statusText)
-          .fontSize(11)
-          .fontColor($r('app.color.text_tertiary'))
-          .width('100%')
-          .textAlign(TextAlign.Center)
-      }
+  @Builder
+  private HomeView() {
+    Column({ space: 14 }) {
+      this.ActiveTasksCard()
+      this.CompletedTasksCard()
+
+      Text(this.statusText)
+        .fontSize(11)
+        .fontColor($r('app.color.text_tertiary'))
+        .width('100%')
+        .textAlign(TextAlign.Center)
     }
     .padding({ left: 22, right: 22, top: 4, bottom: 120 })
     .width('100%')
@@ -1686,6 +1691,89 @@ struct Index {
     .backgroundColor($r('app.color.overlay'))
   }
 
+  @Builder
+  private BottomTabItem(index: number, icon: Resource, label: string) {
+    Column({ space: 2 }) {
+      SymbolGlyph(icon)
+        .fontSize(21)
+        .fontColor([this.selectedTabIndex === index ? $r('app.color.accent') : $r('app.color.text_secondary')])
+      Text(label)
+        .fontSize(11)
+        .fontWeight(this.selectedTabIndex === index ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.selectedTabIndex === index ? $r('app.color.accent') : $r('app.color.text_secondary'))
+    }
+    .width(68)
+    .height(48)
+    .justifyContent(FlexAlign.Center)
+    .backgroundColor(this.selectedTabIndex === index ? $r('app.color.accent_soft') : $r('app.color.transparent'))
+    .borderRadius(24)
+    .onClick(() => this.selectedTabIndex = index)
+  }
+
+  @Builder
+  private AddTodoBottomButton() {
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph($r('sys.symbol.plus'))
+        .fontSize(23)
+        .fontWeight(FontWeight.Bold)
+        .fontColor([$r('app.color.accent')])
+    }
+    .width(58)
+    .height(58)
+    .onClick(() => this.openAddSheet())
+  }
+
+  @Builder
+  private FloatingBottomBar() {
+    Row() {
+      Blank()
+        .width(58)
+
+      Row({ space: 4 }) {
+        this.BottomTabItem(0, $r('sys.symbol.list_bullet'), '首页')
+        this.BottomTabItem(1, $r('sys.symbol.gearshape'), '设置')
+      }
+      .height(58)
+      .padding({ left: 6, right: 6 })
+      .backgroundColor('#DDF9FAFC')
+      .borderRadius(29)
+      .backdropBlur(24)
+      .shadow({ radius: 14, color: $r('app.color.shadow'), offsetX: 0, offsetY: 6 })
+      .layoutWeight(1)
+      .justifyContent(FlexAlign.Center)
+
+      Button() {
+        this.AddTodoBottomButton()
+      }
+      .type(ButtonType.Normal)
+      .width(58)
+      .height(58)
+      .backgroundColor('#DDF9FAFC')
+      .borderRadius(29)
+      .backdropBlur(24)
+      .shadow({ radius: 14, color: $r('app.color.shadow'), offsetX: 0, offsetY: 6 })
+    }
+    .width('100%')
+    .height(58)
+    .padding({ left: 22, right: 22, bottom: 44 })
+    .backgroundColor($r('app.color.transparent'))
+  }
+
+  @Builder
+  private BottomImmersiveMask() {
+    Column()
+      .width('100%')
+      .height(124)
+      .linearGradient({
+        angle: 180,
+        colors: [
+          [$r('app.color.transparent'), 0.0],
+          [$r('app.color.page_background'), 0.78],
+          [$r('app.color.page_background'), 1.0]
+        ]
+      })
+  }
+
   build() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column()
@@ -1697,7 +1785,7 @@ struct Index {
       Column() {
         if (this.configured) {
           Row() {
-            Text(this.showSettings ? 'Cavdal Tasks' : '待办事项')
+            Text(this.selectedTabIndex === 1 ? 'Cavdal Tasks' : '待办事项')
               .fontSize(30)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
@@ -1721,13 +1809,6 @@ struct Index {
               }
             })
 
-            Button(this.showSettings ? '完成' : '设置')
-              .fontSize(14)
-              .fontColor($r('app.color.on_accent'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(18)
-              .height(36)
-              .onClick(() => this.showSettings = !this.showSettings)
           }
           .width('100%')
           .padding({ left: 22, right: 22, top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 4 })
@@ -1742,25 +1823,39 @@ struct Index {
               .margin({ left: 22, right: 22, bottom: 4 })
           }
 
-          Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
+          if (this.selectedTabIndex === 0) {
+            Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
+              Scroll() {
+                Column() {
+                  this.HomeView()
+                }
+                .width('100%')
+                .backgroundColor($r('app.color.page_background'))
+              }
+              .width('100%')
+              .scrollBar(BarState.Auto)
+              .align(Alignment.TopStart)
+            }
+            .layoutWeight(1)
+            .width('100%')
+            .pullToRefresh(this.configured && this.selectedTabIndex === 0)
+            .refreshOffset(64)
+            .onRefreshing(() => {
+              this.refreshFromPull();
+            })
+          } else {
             Scroll() {
               Column() {
-                this.MainView()
+                this.SettingsView()
               }
               .width('100%')
               .backgroundColor($r('app.color.page_background'))
             }
+            .layoutWeight(1)
             .width('100%')
             .scrollBar(BarState.Auto)
             .align(Alignment.TopStart)
           }
-          .layoutWeight(1)
-          .width('100%')
-          .pullToRefresh(this.configured && !this.showSettings)
-          .refreshOffset(64)
-          .onRefreshing(() => {
-            this.refreshFromPull();
-          })
         } else {
           Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
             Scroll() {
@@ -1783,20 +1878,9 @@ struct Index {
       .width('100%')
       .height('100%')
 
-      if (this.configured && !this.showSettings) {
-        Button() {
-          SymbolGlyph($r('sys.symbol.plus'))
-            .fontSize(36)
-            .fontWeight(FontWeight.Bold)
-            .fontColor([$r('app.color.on_accent')])
-        }
-          .backgroundColor($r('app.color.accent'))
-          .width(72)
-          .height(72)
-          .borderRadius(36)
-          .shadow({ radius: 18, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
-          .margin({ right: 30, bottom: 38 })
-          .onClick(() => this.openAddSheet())
+      if (this.configured) {
+        this.BottomImmersiveMask()
+        this.FloatingBottomBar()
       }
 
       if (this.showAddSheet) {

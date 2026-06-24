@@ -27,6 +27,16 @@
 
 只有在官方组件无法满足需求时，才允许封装自定义组件。
 
+## 沉浸光感参考
+
+当需求涉及沉浸光感、底部页签、悬浮页签、模糊背板、MiniBar、渐变蒙层、光感交互等 UI 时：
+
+1. 优先参考 HarmonyOS 官方设计文档「沉浸光感」。
+2. 优先参考官方示例仓库：<https://gitcode.com/HarmonyOS_Samples/Spatialization>。
+3. 实现时优先使用官方 ArkUI / HDS 能力，例如 Tabs / TabContent / HdsTabs / barOverlap / barBackgroundBlurStyle / barFloatingStyle / HDS MiniBar 等。
+4. 不要优先自绘仿制效果；只有官方组件能力无法满足当前交互或布局时，才允许使用 ArkUI 基础组件封装近似实现。
+5. 底部页签文字、图标、背板颜色必须显式验证浅色/深色模式可读性，避免白底白字或暗底暗字。
+
 ## API 使用规则
 
 使用 HarmonyOS API 时必须：
