@@ -123,7 +123,8 @@ export class SettingsStore {
         calendarHref: `${await pref.get('calendarHref', '')}`,
         calendarName: `${await pref.get('calendarName', '')}`,
         lastSyncAt: Number(await pref.get('lastSyncAt', 0)),
-        widgetBlurStyle: widgetBlurStyle(`${await pref.get('widgetBlurStyle', 'thin')}`)
+        widgetBlurStyle: widgetBlurStyle(`${await pref.get('widgetBlurStyle', 'thin')}`),
+        handednessEnabled: `${await pref.get('handednessEnabled', 'false')}` === 'true'
       };
     } catch (err) {
       console.error(`[SettingsStore] load failed: ${errorText(err)}`);
@@ -140,6 +141,7 @@ export class SettingsStore {
       await pref.put('calendarName', settings.calendarName);
       await pref.put('lastSyncAt', settings.lastSyncAt);
       await pref.put('widgetBlurStyle', settings.widgetBlurStyle);
+      await pref.put('handednessEnabled', settings.handednessEnabled ? 'true' : 'false');
       await pref.flush();
     } catch (err) {
       console.error(`[SettingsStore] save failed: ${errorText(err)}`);

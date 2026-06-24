@@ -27,7 +27,8 @@ interface TextColor {
 }
 
 const EMPTY_SETTINGS: AccountSettings = {
-  serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin'
+  serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin',
+  handednessEnabled: false
 };
 
 const EMPTY_PAYLOAD: WidgetPayload = {

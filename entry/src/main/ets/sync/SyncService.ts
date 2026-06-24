@@ -92,7 +92,8 @@ export class SyncService {
       calendarHref: calendar.href,
       calendarName: calendar.displayName,
       lastSyncAt: 0,
-      widgetBlurStyle: previous.widgetBlurStyle
+      widgetBlurStyle: previous.widgetBlurStyle,
+      handednessEnabled: previous.handednessEnabled
     });
   }
 
@@ -101,6 +102,12 @@ export class SyncService {
     settings.widgetBlurStyle = style;
     await this.settings.save(settings);
     await this.refreshWidgets();
+  }
+
+  async saveHandedness(enabled: boolean): Promise<void> {
+    const settings = await this.settings.load();
+    settings.handednessEnabled = enabled;
+    await this.settings.save(settings);
   }
 
   async discover(serverUrl: string, username: string, password: string): Promise<CalendarSource[]> {

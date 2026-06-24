@@ -28,6 +28,8 @@
     { "name": "widget_text_secondary", "value": "#99FFFFFF" },
     { "name": "widget_check_border", "value": "#66FFFFFF" },
     { "name": "widget_check_fill", "value": "#E6FFFFFF" },
-    { "name": "transparent", "value": "#00FFFFFF" }
+    { "name": "transparent", "value": "#00FFFFFF" },
+    { "name": "bar_glass", "value": "#991A1D23" },
+    { "name": "bar_glass_edge", "value": "#33FFFFFF" }
   ]
 }

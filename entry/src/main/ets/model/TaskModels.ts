@@ -33,6 +33,7 @@ export interface AccountSettings {
   calendarName: string;
   lastSyncAt: number;
   widgetBlurStyle: WidgetBlurStyle;
+  handednessEnabled: boolean;
 }
 
 export interface SyncOperation {

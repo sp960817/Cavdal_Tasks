@@ -5,6 +5,9 @@ import { TaskRepository } from '../data/TaskRepository';
 import { SyncService } from '../sync/SyncService';
 import { formatDueForDisplay, parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { VTodoCodec } from '../caldav/VTodoCodec';
+import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
+import { SymbolGlyphModifier, curves } from '@kit.ArkUI';
+import { motion } from '@kit.MultimodalAwarenessKit';
 
 @Entry
 @Component
@@ -26,22 +29,24 @@ struct Index {
   @State selectedDueDate: Date = new Date();
   @State selectedDueHour: number = new Date().getHours();
   @State selectedDueMinute: number = new Date().getMinutes();
-  @State calendarViewDate: Date = new Date();
   @State hasDue: boolean = false;
   @State reminderOption: string = '无';
   @State repeatOption: string = '无';
   @State settingPanel: string = '';
-  @State showTimePopup: boolean = false;
   @State showAddSheet: boolean = false;
-  @State showDueSheet: boolean = false;
   @State selectedTabIndex: number = 0;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
-  @State showCompleted: boolean = true;
-  @State showReminderPopup: boolean = false;
-  @State showRepeatPopup: boolean = false;
+  @State showCompleted: boolean = false;
+  @State completedUserOverride: boolean = true;
+  @State homeViewportHeight: number = 0;
   @State searchQuery: string = '';
   @State editingTask: TodoTask | null = null;
+  @State handednessEnabled: boolean = false;
+  @State fabAlignRules: AlignRuleOption = {
+    right: { anchor: '__container__', align: HorizontalAlign.End },
+    bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+  };
   @StorageProp('statusBarHeight') statusBarHeight: number = 0;
 
   private uiContext: UIContext = this.getUIContext();
@@ -51,6 +56,47 @@ struct Index {
   private syncService: SyncService = new SyncService(this.context.getApplicationContext());
   private firstPageShow: boolean = true;
   private reminderNotificationPrompted: boolean = false;
+  private hdsController: HdsTabsController = new HdsTabsController();
+  private handleHoldingHandChange: Callback<motion.HoldingHandStatus> = (status: motion.HoldingHandStatus) => {
+    this.getUIContext().animateTo({ curve: curves.interpolatingSpring(0, 1, 288, 30) }, () => {
+      if (canIUse('SystemCapability.MultimodalAwareness.Motion')) {
+        if (status === motion.HoldingHandStatus.LEFT_HAND_HELD) {
+          this.fabAlignRules = {
+            left: { anchor: '__container__', align: HorizontalAlign.Start },
+            bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+          };
+        } else if (status === motion.HoldingHandStatus.RIGHT_HAND_HELD) {
+          this.fabAlignRules = {
+            right: { anchor: '__container__', align: HorizontalAlign.End },
+            bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+          };
+        }
+      }
+    });
+  };
+  private homeTabBar: BottomTabBarStyle = new BottomTabBarStyle({
+    normal: new SymbolGlyphModifier($r('sys.symbol.list_bullet'))
+      .renderingStrategy(SymbolRenderingStrategy.SINGLE)
+      .fontColor([$r('app.color.text_secondary')]),
+    selected: new SymbolGlyphModifier($r('sys.symbol.list_bullet'))
+      .renderingStrategy(SymbolRenderingStrategy.SINGLE)
+      .fontColor([$r('app.color.accent')])
+  }, '首页').labelStyle({
+    unselectedColor: $r('app.color.text_secondary'),
+    selectedColor: $r('app.color.accent')
+  });
+  private settingsTabBar: BottomTabBarStyle = new BottomTabBarStyle({
+    normal: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
+      .renderingStrategy(SymbolRenderingStrategy.SINGLE)
+      .fontColor([$r('app.color.text_secondary')]),
+    selected: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
+      .renderingStrategy(SymbolRenderingStrategy.SINGLE)
+      .fontColor([$r('app.color.accent')])
+  }, '设置').labelStyle({
+    unselectedColor: $r('app.color.text_secondary'),
+    selectedColor: $r('app.color.accent')
+  });
+  private blurStyles: WidgetBlurStyle[] = ['none', 'thin', 'regular', 'thick'];
 
   private requireHostContext(): common.UIAbilityContext {
     const hostContext = this.uiContext.getHostContext();
@@ -103,6 +149,44 @@ struct Index {
     this.load();
   }
 
+  aboutToDisappear(): void {
+    this.unregisterHoldingHand();
+  }
+
+  private registerHoldingHand(): void {
+    try {
+      if (canIUse('SystemCapability.MultimodalAwareness.Motion')) {
+        motion.on('holdingHandChanged', this.handleHoldingHandChange);
+      }
+    } catch (e) {
+    }
+  }
+
+  private unregisterHoldingHand(): void {
+    try {
+      if (canIUse('SystemCapability.MultimodalAwareness.Motion')) {
+        motion.off('holdingHandChanged', this.handleHoldingHandChange);
+      }
+    } catch (e) {
+    }
+  }
+
+  private toggleHandedness(enabled: boolean): void {
+    this.handednessEnabled = enabled;
+    if (enabled) {
+      this.registerHoldingHand();
+    } else {
+      this.unregisterHoldingHand();
+      this.getUIContext().animateTo({ curve: curves.interpolatingSpring(0, 1, 288, 30) }, () => {
+        this.fabAlignRules = {
+          right: { anchor: '__container__', align: HorizontalAlign.End },
+          bottom: { anchor: '__container__', align: VerticalAlign.Bottom },
+        };
+      });
+    }
+    this.syncService.saveHandedness(enabled);
+  }
+
   onPageShow(): void {
     if (this.firstPageShow) {
       this.firstPageShow = false;
@@ -123,6 +207,10 @@ struct Index {
       this.serverUrl = settings.serverUrl;
       this.username = settings.username;
       this.widgetBlurStyle = settings.widgetBlurStyle;
+      this.handednessEnabled = settings.handednessEnabled;
+      if (settings.handednessEnabled) {
+        this.registerHoldingHand();
+      }
       this.statusText = this.configured ? '准备同步' : '请配置 CalDAV Tasks 账号';
       await this.refreshLists();
       if (await this.ensureReminderNotifications(this.tasks.some((task: TodoTask) => this.taskHasReminder(task)))) {
@@ -235,7 +323,6 @@ struct Index {
       this.repeatOption = '无';
       this.settingPanel = '';
       this.showAddSheet = false;
-      this.showDueSheet = false;
       this.statusText = '已添加';
       await this.refreshLists();
     } catch (err) {
@@ -249,13 +336,10 @@ struct Index {
     this.selectedDueDate = now;
     this.selectedDueHour = now.getHours();
     this.selectedDueMinute = now.getMinutes();
-    this.calendarViewDate = new Date(now.getFullYear(), now.getMonth(), 1);
     this.hasDue = false;
     this.reminderOption = '无';
     this.repeatOption = '无';
     this.settingPanel = '';
-    this.showTimePopup = false;
-    this.showDueSheet = false;
     this.showAddSheet = true;
   }
 
@@ -296,11 +380,6 @@ struct Index {
     return `${due.getUTCFullYear()}${pad(due.getUTCMonth() + 1)}${pad(due.getUTCDate())}T${pad(due.getUTCHours())}${pad(due.getUTCMinutes())}00Z`;
   }
 
-  private duePreview(): string {
-    const pad = (value: number): string => value < 10 ? `0${value}` : `${value}`;
-    return `${this.selectedDueDate.getFullYear()}年${this.selectedDueDate.getMonth() + 1}月${this.selectedDueDate.getDate()}日 ${pad(this.selectedDueHour)}:${pad(this.selectedDueMinute)}`;
-  }
-
   private dateOnlyPreview(): string {
     return `${this.selectedDueDate.getFullYear()}年${this.selectedDueDate.getMonth() + 1}月${this.selectedDueDate.getDate()}日`;
   }
@@ -316,74 +395,6 @@ struct Index {
 
   private repeatOptions(): string[] {
     return ['无', '每天', '每周', '每月'];
-  }
-
-  private monthTitle(): string {
-    const monthNames: string[] = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-    return monthNames[this.calendarViewDate.getMonth()];
-  }
-
-  private weekdayHeaders(): string[] {
-    return ['一', '二', '三', '四', '五', '六', '日'];
-  }
-
-  private calendarCells(): number[] {
-    const year = this.calendarViewDate.getFullYear();
-    const month = this.calendarViewDate.getMonth();
-    const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
-    const count = new Date(year, month + 1, 0).getDate();
-    const cells: number[] = [];
-    for (let index = 0; index < firstWeekday; index++) {
-      cells.push(0);
-    }
-    for (let day = 1; day <= count; day++) {
-      cells.push(day);
-    }
-    while (cells.length < 35 || cells.length % 7 !== 0) {
-      cells.push(0);
-    }
-    return cells;
-  }
-
-  private isSelectedDay(day: number): boolean {
-    return day > 0 &&
-      this.selectedDueDate.getFullYear() === this.calendarViewDate.getFullYear() &&
-      this.selectedDueDate.getMonth() === this.calendarViewDate.getMonth() &&
-      this.selectedDueDate.getDate() === day;
-  }
-
-  private holidayText(day: number): string {
-    const month = this.calendarViewDate.getMonth() + 1;
-    if (month === 6 && day === 1) {
-      return '儿童节';
-    }
-    if (month === 6 && day === 19) {
-      return '端午节';
-    }
-    if (month === 6 && day === 21) {
-      return '父亲节';
-    }
-    return '';
-  }
-
-  private isRestDay(day: number): boolean {
-    const week = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth(), day).getDay();
-    return day > 0 && (week === 0 || week === 6);
-  }
-
-  private changeMonth(offset: number): void {
-    this.calendarViewDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth() + offset, 1);
-  }
-
-  private selectCalendarDay(day: number): void {
-    if (day === 0) {
-      return;
-    }
-    this.selectedDueDate = new Date(this.calendarViewDate.getFullYear(), this.calendarViewDate.getMonth(), day);
-  }
-
-  private visibleCompletedTasks(): TodoTask[] {
-    return this.completed.length > 5 ? this.completed.slice(0, 5) : this.completed;
   }
 
   private async toggleTask(task: TodoTask, done: boolean): Promise<void> {
@@ -449,8 +460,9 @@ struct Index {
         .width('100%')
 
       Row({ space: 4 }) {
-        ForEach(['none', 'thin', 'regular', 'thick'] as WidgetBlurStyle[], (style: WidgetBlurStyle) => {
+        ForEach(this.blurStyles, (style: WidgetBlurStyle) => {
           Button(this.widgetBlurLabel(style))
+            .type(ButtonType.Normal)
             .fontSize(13)
             .fontColor(this.widgetBlurStyle === style ?
               $r('app.color.on_accent') : $r('app.color.text_secondary'))
@@ -609,8 +621,8 @@ struct Index {
       }
     }
     .width('100%')
-    .height(52)
-    .padding({ left: 4, right: 6 })
+    .height(44)
+    .padding({ left: 0, right: 2 })
     .justifyContent(FlexAlign.Center)
   }
 
@@ -641,27 +653,26 @@ struct Index {
       }
     }
     .width('100%')
-    .height(48)
-    .padding({ left: 4, right: 6 })
+    .height(40)
+    .padding({ left: 0, right: 2 })
     .alignItems(VerticalAlign.Center)
   }
 
   @Builder
   private ActiveTasksCard() {
     Column() {
-      if (this.tasks.length === 0) {
+      if (this.filteredActiveTasks().length === 0) {
         Text('没有进行中的待办')
           .fontSize(15)
           .fontColor($r('app.color.text_tertiary'))
-          .height(52)
           .width('100%')
+          .layoutWeight(1)
           .textAlign(TextAlign.Center)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
       } else {
         List({ space: 0 }) {
-          ForEach(this.tasks.filter((t: TodoTask) => {
-            if (this.searchQuery.length === 0) return true;
-            return t.title.toLowerCase().includes(this.searchQuery.toLowerCase());
-          }), (task: TodoTask) => {
+          ForEach(this.filteredActiveTasks(), (task: TodoTask) => {
             ListItem() {
               this.ActiveTaskRow(task)
             }
@@ -678,11 +689,14 @@ struct Index {
           }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
         }
         .width('100%')
+        .layoutWeight(1)
         .scrollBar(BarState.Auto)
+        .align(Alignment.TopStart)
       }
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 12, bottom: 12 })
+    .height(this.computeActiveCardHeight())
+    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
     .backgroundColor($r('app.color.surface'))
     .borderRadius(18)
   }
@@ -718,31 +732,31 @@ struct Index {
           .fontSize(15)
           .fontColor($r('app.color.text_tertiary'))
           .margin({ right: 8 })
-        SymbolGlyph(this.showCompleted ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+        SymbolGlyph(this.effectiveCompletedOpen() ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
           .fontSize(18)
           .fontColor([$r('app.color.text_disabled')])
       }
       .width('100%')
       .height(34)
-      .margin({ bottom: this.showCompleted ? 8 : 0 })
+      .margin({ bottom: this.effectiveCompletedOpen() ? 8 : 0 })
       .onClick(() => {
-        this.showCompleted = !this.showCompleted;
+        this.showCompleted = !this.effectiveCompletedOpen();
+        this.completedUserOverride = true;
       })
 
-      if (this.showCompleted) {
-        if (this.completed.length === 0) {
+      if (this.effectiveCompletedOpen()) {
+        if (this.filteredCompletedTasks().length === 0) {
           Text('暂无已完成事项')
             .fontSize(15)
             .fontColor($r('app.color.text_disabled'))
-            .height(52)
             .width('100%')
+            .layoutWeight(1)
             .textAlign(TextAlign.Center)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
         } else {
           List({ space: 0 }) {
-            ForEach(this.completed.filter((t: TodoTask) => {
-              if (this.searchQuery.length === 0) return true;
-              return t.title.toLowerCase().includes(this.searchQuery.toLowerCase());
-            }), (task: TodoTask) => {
+            ForEach(this.filteredCompletedTasks(), (task: TodoTask) => {
               ListItem() {
                 this.CompletedTaskRow(task)
               }
@@ -759,13 +773,15 @@ struct Index {
             }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
           }
           .width('100%')
-          .height(240)
+          .layoutWeight(1)
           .scrollBar(BarState.Auto)
+          .align(Alignment.TopStart)
         }
       }
     }
     .width('100%')
-    .padding({ left: 20, right: 20, top: 16, bottom: 16 })
+    .height(this.computeCompletedCardHeight())
+    .padding({ left: 16, right: 16, top: 12, bottom: 12 })
     .backgroundColor($r('app.color.surface'))
     .borderRadius(18)
   }
@@ -778,11 +794,92 @@ struct Index {
     return this.tasks.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
   }
 
+  private filteredCompletedTasks(): TodoTask[] {
+    if (this.searchQuery.length === 0) {
+      return this.completed;
+    }
+    const q = this.searchQuery.toLowerCase();
+    return this.completed.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
+  }
+
+  private pendingTaskCount(): number {
+    return this.filteredActiveTasks().filter((t: TodoTask) => t.syncState !== 'synced').length;
+  }
+
+  private viewportHeight(): number {
+    return this.homeViewportHeight > 0 ? this.homeViewportHeight : 700;
+  }
+
+  private homeUsableHeight(): number {
+    return Math.max(this.viewportHeight() - 124, 200);
+  }
+
+  private activeNaturalHeight(): number {
+    const count = this.filteredActiveTasks().length;
+    if (count === 0) {
+      return 72;
+    }
+    return count * 44 + this.pendingTaskCount() * 18 + 20;
+  }
+
+  private autoFoldCompleted(): boolean {
+    const remainingIfExpanded = this.homeUsableHeight() - this.activeNaturalHeight();
+    return remainingIfExpanded < this.viewportHeight() * 0.5;
+  }
+
+  private effectiveCompletedOpen(): boolean {
+    if (!this.completedUserOverride) {
+      return !this.autoFoldCompleted();
+    }
+    return this.showCompleted;
+  }
+
+  private computeActiveCardHeight(): number {
+    const usable = this.homeUsableHeight();
+    if (this.effectiveCompletedOpen()) {
+      const completedMin = 190;
+      const completedH = Math.max(usable - this.activeNaturalHeight(), completedMin);
+      return Math.min(this.activeNaturalHeight(), usable - completedH);
+    }
+    const foldedCompletedH = 58;
+    return Math.max(usable - foldedCompletedH, 72);
+  }
+
+  private computeCompletedCardHeight(): number {
+    if (!this.effectiveCompletedOpen()) {
+      return 58;
+    }
+    const usable = this.homeUsableHeight();
+    return Math.max(usable - this.activeNaturalHeight(), 190);
+  }
+
   @Builder
   private SettingsView() {
     Column({ space: 14 }) {
       this.ServerSettingsMenu()
       this.WidgetAppearanceSettings()
+
+      Row() {
+        Column({ space: 2 }) {
+          Text('智感握姿')
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+          Text('加号按钮跟随握持手位置')
+            .fontSize(12)
+            .fontColor($r('app.color.text_tertiary'))
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+
+        Toggle({ type: ToggleType.Switch, isOn: this.handednessEnabled })
+          .onChange((on: boolean) => this.toggleHandedness(on))
+      }
+      .width('100%')
+      .padding(14)
+      .backgroundColor($r('app.color.surface'))
+      .borderRadius(14)
+
       Button('立即同步')
         .onClick(() => this.syncNow())
         .width('100%')
@@ -809,55 +906,172 @@ struct Index {
         .width('100%')
         .textAlign(TextAlign.Center)
     }
-    .padding({ left: 22, right: 22, top: 4, bottom: 120 })
+    .padding({ left: 16, right: 16, top: 4, bottom: 76 })
     .width('100%')
+    .height('100%')
   }
 
   @Builder
-  private AddTaskSheet() {
-    Column() {
-      Blank()
+  private AddTaskSheetContent() {
+    Column({ space: 12 }) {
+      Row() {
+        Column({ space: 2 }) {
+          Text('添加待办')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          if (this.hasDue) {
+            Text(this.reminderOption !== '无' ? this.timeOnlyPreview() : this.dateOnlyPreview())
+              .fontSize(13)
+              .fontColor($r('app.color.accent'))
+          }
+        }
         .layoutWeight(1)
-        .width('100%')
-        .onClick(() => {
-          this.showAddSheet = false;
-          this.showDueSheet = false;
-        })
+        .alignItems(HorizontalAlign.Start)
+        Button('添加')
+          .fontSize(14)
+          .fontColor($r('app.color.on_accent'))
+          .backgroundColor($r('app.color.accent'))
+          .borderRadius(18)
+          .height(36)
+          .onClick(() => this.addTask())
+      }
+      .width('100%')
 
+      TextInput({ placeholder: '待办标题', text: this.newTitle })
+        .onChange((value: string) => this.newTitle = value)
+        .height(54)
+        .fontSize(18)
+        .backgroundColor($r('app.color.surface_input'))
+        .borderRadius(16)
+
+      TextInput({ placeholder: '说明，可留空', text: this.newDescription })
+        .onChange((value: string) => this.newDescription = value)
+        .height(54)
+        .fontSize(16)
+        .backgroundColor($r('app.color.surface_input'))
+        .borderRadius(16)
+
+      Row({ space: 10 }) {
+        Row({ space: 10 }) {
+          Button() {
+            SymbolGlyph($r('sys.symbol.calendar'))
+              .fontSize(21)
+              .fontWeight(FontWeight.Medium)
+              .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
+          }
+          .type(ButtonType.Normal)
+          .width(42)
+          .height(42)
+          .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .borderRadius(21)
+          .onClick(() => this.showDatePicker())
+
+          if (this.hasDue) {
+            Button() {
+              SymbolGlyph($r('sys.symbol.clock'))
+                .fontSize(20)
+                .fontWeight(FontWeight.Medium)
+                .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
+            }
+            .type(ButtonType.Normal)
+            .width(42)
+            .height(42)
+            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+            .borderRadius(21)
+            .onClick(() => this.showTimePicker())
+          }
+
+          Button() {
+            SymbolGlyph($r('sys.symbol.bell'))
+              .fontSize(20)
+              .fontWeight(FontWeight.Medium)
+              .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
+          }
+          .type(ButtonType.Normal)
+          .width(42)
+          .height(42)
+          .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .borderRadius(21)
+          .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
+
+          Button() {
+            SymbolGlyph($r('sys.symbol.repeat'))
+              .fontSize(20)
+              .fontWeight(FontWeight.Medium)
+              .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
+          }
+          .type(ButtonType.Normal)
+          .width(42)
+          .height(42)
+          .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .borderRadius(21)
+          .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
+        }
+
+        Blank()
+          .layoutWeight(1)
+
+        Button('取消')
+          .height(42)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.on_accent'))
+          .backgroundColor($r('app.color.accent'))
+          .borderRadius(21)
+          .onClick(() => {
+            this.showAddSheet = false;
+          })
+      }
+        .width('100%')
+        .margin({ top: 4 })
+
+      if (this.settingPanel === 'reminder') {
+        this.OptionChips(this.reminderOptions(), 'reminder')
+      }
+      if (this.settingPanel === 'repeat') {
+        this.OptionChips(this.repeatOptions(), 'repeat')
+      }
+    }
+    .width('100%')
+    .padding({ left: 20, right: 20, top: 20, bottom: 26 })
+  }
+
+  @Builder
+  private EditTaskSheetContent() {
+    if (this.editingTask !== null) {
       Column({ space: 12 }) {
         Row() {
-          Column({ space: 2 }) {
-            Text('添加待办')
-              .fontSize(22)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-            if (this.hasDue) {
-              Text(this.reminderOption !== '无' ? this.timeOnlyPreview() : this.dateOnlyPreview())
-                .fontSize(13)
-                .fontColor($r('app.color.accent'))
-            }
-          }
-          .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
-          Button('添加')
+          Text('编辑待办')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+            .layoutWeight(1)
+          Button('完成')
             .fontSize(14)
             .fontColor($r('app.color.on_accent'))
             .backgroundColor($r('app.color.accent'))
             .borderRadius(18)
             .height(36)
-            .onClick(() => this.addTask())
+            .onClick(() => {
+              this.saveEdit();
+            })
         }
         .width('100%')
 
-        TextInput({ placeholder: '待办标题', text: this.newTitle })
-          .onChange((value: string) => this.newTitle = value)
+        TextInput({ placeholder: '待办标题', text: this.editingTask!.title })
+          .onChange((value: string) => {
+            this.updateEditingTitle(value);
+          })
           .height(54)
           .fontSize(18)
           .backgroundColor($r('app.color.surface_input'))
           .borderRadius(16)
 
-        TextInput({ placeholder: '说明，可留空', text: this.newDescription })
-          .onChange((value: string) => this.newDescription = value)
+        TextInput({ placeholder: '说明，可留空', text: this.editingTask!.description })
+          .onChange((value: string) => {
+            this.updateEditingDesc(value);
+          })
           .height(54)
           .fontSize(16)
           .backgroundColor($r('app.color.surface_input'))
@@ -865,12 +1079,13 @@ struct Index {
 
         Row({ space: 10 }) {
           Row({ space: 10 }) {
-            Stack({ alignContent: Alignment.Center }) {
+            Button() {
               SymbolGlyph($r('sys.symbol.calendar'))
                 .fontSize(21)
                 .fontWeight(FontWeight.Medium)
                 .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
+            .type(ButtonType.Normal)
             .width(42)
             .height(42)
             .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.accent_soft'))
@@ -878,12 +1093,13 @@ struct Index {
             .onClick(() => this.showDatePicker())
 
             if (this.hasDue) {
-              Stack({ alignContent: Alignment.Center }) {
+              Button() {
                 SymbolGlyph($r('sys.symbol.clock'))
                   .fontSize(20)
                   .fontWeight(FontWeight.Medium)
                   .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
+              .type(ButtonType.Normal)
               .width(42)
               .height(42)
               .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
@@ -891,34 +1107,38 @@ struct Index {
               .onClick(() => this.showTimePicker())
             }
 
-            Stack({ alignContent: Alignment.Center }) {
+            Button() {
               SymbolGlyph($r('sys.symbol.bell'))
                 .fontSize(20)
                 .fontWeight(FontWeight.Medium)
                 .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
+            .type(ButtonType.Normal)
             .width(42)
             .height(42)
             .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
             .borderRadius(21)
-            .onClick(() => this.showReminderPopup = !this.showReminderPopup)
+            .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
 
-            Stack({ alignContent: Alignment.Center }) {
+            Button() {
               SymbolGlyph($r('sys.symbol.repeat'))
                 .fontSize(20)
                 .fontWeight(FontWeight.Medium)
                 .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
+            .type(ButtonType.Normal)
             .width(42)
             .height(42)
             .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
             .borderRadius(21)
-            .onClick(() => this.showRepeatPopup = !this.showRepeatPopup)
+            .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
           }
+          Blank().layoutWeight(1)
+        }
 
+        Row({ space: 10 }) {
           Blank()
             .layoutWeight(1)
-
           Button('取消')
             .height(42)
             .fontSize(16)
@@ -927,257 +1147,23 @@ struct Index {
             .backgroundColor($r('app.color.accent'))
             .borderRadius(21)
             .onClick(() => {
-              this.showAddSheet = false;
-              this.showDueSheet = false;
+              this.showEditSheet = false;
+              this.editingTask = null;
             })
         }
-          .width('100%')
-          .margin({ top: 4 })
+        .width('100%')
+        .margin({ top: 4 })
+
+        if (this.settingPanel === 'reminder') {
+          this.OptionChips(this.reminderOptions(), 'reminder')
+        }
+        if (this.settingPanel === 'repeat') {
+          this.OptionChips(this.repeatOptions(), 'repeat')
+        }
       }
       .width('100%')
       .padding({ left: 20, right: 20, top: 20, bottom: 26 })
-      .backgroundColor($r('app.color.surface_translucent'))
-      .borderRadius({ topLeft: 28, topRight: 28 })
-      .shadow({ radius: 28, color: $r('app.color.icon_background'), offsetX: 0, offsetY: -8 })
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.overlay'))
-  }
-
-  @Builder
-  private DuePickerSheet() {
-    Column() {
-      Blank()
-        .layoutWeight(1)
-        .width('100%')
-        .onClick(() => this.showDueSheet = false)
-
-      Column({ space: 12 }) {
-        Row() {
-          Button() {
-            SymbolGlyph($r('sys.symbol.xmark'))
-              .fontSize(23)
-              .fontColor([$r('app.color.text_primary')])
-          }
-            .type(ButtonType.Normal)
-            .width(46)
-            .height(46)
-            .backgroundColor($r('app.color.surface_input'))
-            .borderRadius(23)
-            .border({ width: 1, color: $r('app.color.divider') })
-            .shadow({ radius: 14, color: $r('app.color.icon_background'), offsetX: 0, offsetY: 6 })
-            .onClick(() => this.showDueSheet = false)
-
-          Text('日期和时间')
-            .fontSize(18)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-
-          Button() {
-            SymbolGlyph($r('sys.symbol.checkmark'))
-              .fontSize(22)
-              .fontColor([$r('app.color.on_accent')])
-          }
-            .width(46)
-            .height(46)
-            .backgroundColor($r('app.color.accent'))
-            .borderRadius(23)
-            .shadow({ radius: 16, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
-            .onClick(() => {
-              this.hasDue = true;
-              this.settingPanel = '';
-              this.showDueSheet = false;
-            })
-        }
-        .width('100%')
-        .alignItems(VerticalAlign.Center)
-
-        Text(this.duePreview())
-          .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .textAlign(TextAlign.Center)
-
-        Scroll() {
-          Column({ space: 12 }) {
-            this.CalendarPanel()
-            this.DateTimePanel()
-          }
-          .width('100%')
-          .padding({ right: 6 })
-        }
-        .width('100%')
-        .height(448)
-        .scrollBar(BarState.Auto)
-        .scrollBarWidth('4vp')
-
-        Text('清除')
-          .fontSize(17)
-          .fontColor($r('app.color.danger'))
-          .height(42)
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            const now = new Date();
-            this.selectedDueDate = now;
-            this.selectedDueHour = now.getHours();
-            this.selectedDueMinute = now.getMinutes();
-            this.calendarViewDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            this.hasDue = false;
-            this.reminderOption = '无';
-            this.repeatOption = '无';
-            this.settingPanel = '';
-            this.showDueSheet = false;
-          })
-      }
-      .width('100%')
-      .padding({ left: 18, right: 12, top: 16, bottom: 20 })
-      .backgroundColor($r('app.color.surface_translucent'))
-      .borderRadius({ topLeft: 28, topRight: 28 })
-      .shadow({ radius: 28, color: $r('app.color.icon_background'), offsetX: 0, offsetY: -8 })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.overlay'))
-  }
-
-  @Builder
-  private EditTaskSheet() {
-    Column() {
-      if (this.editingTask !== null) {
-        Blank()
-          .layoutWeight(1)
-          .width('100%')
-          .onClick(() => {
-            this.showEditSheet = false;
-            this.editingTask = null;
-          })
-      }
-
-      if (this.editingTask !== null) {
-        Column({ space: 12 }) {
-          Row() {
-            Text('编辑待办')
-              .fontSize(22)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-              .layoutWeight(1)
-            Button('完成')
-              .fontSize(14)
-              .fontColor($r('app.color.on_accent'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(18)
-              .height(36)
-              .onClick(() => {
-                this.saveEdit();
-              })
-          }
-          .width('100%')
-
-          TextInput({ placeholder: '待办标题', text: this.editingTask!.title })
-            .onChange((value: string) => {
-              this.updateEditingTitle(value);
-            })
-            .height(54)
-            .fontSize(18)
-            .backgroundColor($r('app.color.surface_input'))
-            .borderRadius(16)
-
-          TextInput({ placeholder: '说明，可留空', text: this.editingTask!.description })
-            .onChange((value: string) => {
-              this.updateEditingDesc(value);
-            })
-            .height(54)
-            .fontSize(16)
-            .backgroundColor($r('app.color.surface_input'))
-            .borderRadius(16)
-
-          Row({ space: 10 }) {
-            Row({ space: 10 }) {
-              Stack({ alignContent: Alignment.Center }) {
-                SymbolGlyph($r('sys.symbol.calendar'))
-                  .fontSize(21)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
-              }
-              .width(42)
-              .height(42)
-              .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.accent_soft'))
-              .borderRadius(21)
-              .onClick(() => this.showDatePicker())
-
-              if (this.hasDue) {
-                Stack({ alignContent: Alignment.Center }) {
-                  SymbolGlyph($r('sys.symbol.clock'))
-                    .fontSize(20)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-                }
-                .width(42)
-                .height(42)
-                .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
-                .borderRadius(21)
-                .onClick(() => this.showTimePicker())
-              }
-
-              Stack({ alignContent: Alignment.Center }) {
-                SymbolGlyph($r('sys.symbol.bell'))
-                  .fontSize(20)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-              }
-              .width(42)
-              .height(42)
-              .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
-              .borderRadius(21)
-              .onClick(() => this.showReminderPopup = !this.showReminderPopup)
-
-              Stack({ alignContent: Alignment.Center }) {
-                SymbolGlyph($r('sys.symbol.repeat'))
-                  .fontSize(20)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-              }
-              .width(42)
-              .height(42)
-              .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
-              .borderRadius(21)
-              .onClick(() => this.showRepeatPopup = !this.showRepeatPopup)
-            }
-            Blank().layoutWeight(1)
-          }
-
-          Row({ space: 10 }) {
-            Blank()
-              .layoutWeight(1)
-            Button('取消')
-              .height(42)
-              .fontSize(16)
-              .fontWeight(FontWeight.Medium)
-              .fontColor($r('app.color.on_accent'))
-              .backgroundColor($r('app.color.accent'))
-              .borderRadius(21)
-              .onClick(() => {
-                this.showEditSheet = false;
-                this.editingTask = null;
-              })
-          }
-          .width('100%')
-          .margin({ top: 4 })
-        }
-        .width('100%')
-        .padding({ left: 20, right: 20, top: 20, bottom: 26 })
-        .backgroundColor($r('app.color.surface_translucent'))
-        .borderRadius({ topLeft: 28, topRight: 28 })
-        .shadow({ radius: 28, color: $r('app.color.icon_background'), offsetX: 0, offsetY: -8 })
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.overlay'))
   }
 
   private updateEditingTitle(value: string): void {
@@ -1198,22 +1184,17 @@ struct Index {
       this.selectedDueDate = new Date(due.year, due.month - 1, due.day);
       this.selectedDueHour = due.hour;
       this.selectedDueMinute = due.minute;
-      this.calendarViewDate = new Date(due.year, due.month - 1, 1);
       this.hasDue = true;
     } else {
       const now = new Date();
       this.selectedDueDate = now;
       this.selectedDueHour = now.getHours();
       this.selectedDueMinute = now.getMinutes();
-      this.calendarViewDate = new Date(now.getFullYear(), now.getMonth(), 1);
       this.hasDue = false;
     }
     this.reminderOption = VTodoCodec.detectReminder(task.rawIcs, task.due);
     this.repeatOption = VTodoCodec.detectRepeat(task.rawIcs);
     this.settingPanel = '';
-    this.showTimePopup = false;
-    this.showReminderPopup = false;
-    this.showRepeatPopup = false;
   }
 
   private async saveEdit(): Promise<void> {
@@ -1271,207 +1252,6 @@ struct Index {
   }
 
   @Builder
-  private CalendarPanel() {
-    Column({ space: 8 }) {
-      Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_tertiary')])
-          .width(38)
-          .onClick(() => this.changeMonth(-1))
-        Text(this.monthTitle())
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_tertiary')])
-          .width(38)
-          .onClick(() => this.changeMonth(1))
-      }
-      .width('100%')
-      .height(36)
-
-      Grid() {
-        ForEach(this.weekdayHeaders(), (label: string) => {
-          GridItem() {
-            Text(label)
-              .fontSize(13)
-              .fontColor($r('app.color.text_tertiary'))
-              .textAlign(TextAlign.Center)
-              .width('100%')
-          }
-          .height(22)
-        }, (label: string) => label)
-      }
-      .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr')
-      .rowsGap(0)
-      .columnsGap(0)
-      .width('100%')
-      .height(24)
-
-      Grid() {
-        ForEach(this.calendarCells(), (day: number, index: number) => {
-          GridItem() {
-            if (day === 0) {
-              Blank()
-                .width('100%')
-                .height(37)
-            } else {
-              Stack({ alignContent: Alignment.Center }) {
-                if (this.isSelectedDay(day)) {
-                  Circle()
-                    .width(38)
-                    .height(38)
-                    .fill($r('app.color.accent'))
-                }
-                Column({ space: 1 }) {
-                  Text(`${day}`)
-                    .fontSize(16)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(this.isSelectedDay(day) ? $r('app.color.on_accent') : $r('app.color.text_primary'))
-                    .textAlign(TextAlign.Center)
-                  if (!this.isSelectedDay(day) && this.holidayText(day).length > 0) {
-                    Text(this.holidayText(day))
-                      .fontSize(9)
-                      .fontColor($r('app.color.success'))
-                      .textAlign(TextAlign.Center)
-                      .maxLines(1)
-                  } else if (!this.isSelectedDay(day) && this.isRestDay(day)) {
-                    Text('休')
-                      .fontSize(9)
-                      .fontColor($r('app.color.success'))
-                      .textAlign(TextAlign.Center)
-                  } else {
-                    Text(' ')
-                      .fontSize(9)
-                  }
-                }
-              }
-              .width('100%')
-              .height(37)
-              .onClick(() => this.selectCalendarDay(day))
-            }
-          }
-        }, (day: number, index: number) => `${index}-${day}`)
-      }
-      .columnsTemplate('1fr 1fr 1fr 1fr 1fr 1fr 1fr')
-      .rowsGap(2)
-      .columnsGap(0)
-      .width('100%')
-      .height(210)
-    }
-    .width('100%')
-  }
-
-  @Builder
-  private DateTimePanel() {
-    Column() {
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.clock'))
-          .fontSize(21)
-          .fontColor([$r('app.color.text_secondary')])
-          .width(30)
-        Text('时间')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-        Text(this.hasDue ? this.timeOnlyPreview() : '无')
-          .fontSize(15)
-          .fontColor($r('app.color.text_secondary'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(15)
-          .fontColor([this.hasDue ? $r('app.color.text_disabled') : $r('app.color.divider')])
-          .onClick(() => {
-            const now = new Date();
-            this.selectedDueHour = now.getHours();
-            this.selectedDueMinute = now.getMinutes();
-            this.hasDue = false;
-            this.reminderOption = '无';
-          })
-      }
-      .height(46)
-      .width('100%')
-      .onClick(() => {
-        this.reminderOption = '立刻';
-        this.showTimePopup = true;
-        this.settingPanel = '';
-      })
-      Divider()
-        .color($r('app.color.divider'))
-        .margin({ left: 42 })
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.alarm'))
-          .fontSize(21)
-          .fontColor([$r('app.color.text_secondary')])
-          .width(30)
-        Text('提醒')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-        Text(this.reminderOption)
-          .fontSize(15)
-          .fontColor($r('app.color.text_secondary'))
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(15)
-          .fontColor([this.reminderOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider')])
-          .onClick(() => {
-            this.reminderOption = '无';
-          })
-      }
-      .height(46)
-      .width('100%')
-      .onClick(() => {
-        this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder';
-      })
-      if (this.settingPanel === 'reminder') {
-        this.OptionChips(this.reminderOptions(), 'reminder')
-      }
-      Divider()
-        .color($r('app.color.divider'))
-        .margin({ left: 42 })
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.repeat'))
-          .fontSize(21)
-          .fontColor([$r('app.color.text_secondary')])
-          .width(30)
-        Text('重复')
-          .fontSize(17)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-        Text(this.repeatOption)
-          .fontSize(15)
-          .fontColor($r('app.color.text_secondary'))
-        SymbolGlyph($r('sys.symbol.xmark'))
-          .fontSize(15)
-          .fontColor([this.repeatOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider')])
-          .onClick(() => {
-            this.repeatOption = '无';
-          })
-      }
-      .height(46)
-      .width('100%')
-      .onClick(() => {
-        this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat';
-      })
-      if (this.settingPanel === 'repeat') {
-        this.OptionChips(this.repeatOptions(), 'repeat')
-      }
-    }
-    .width('100%')
-    .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-    .backgroundColor($r('app.color.surface_input'))
-    .borderRadius(18)
-  }
-
-  @Builder
   private SettingRow(icon: Resource, label: string, value: string, target: string) {
     Row({ space: 12 }) {
       SymbolGlyph(icon)
@@ -1507,12 +1287,13 @@ struct Index {
   private OptionChips(options: string[], target: string) {
     Row({ space: 8 }) {
       ForEach(options, (option: string) => {
-        Text(option)
+        Button(option)
+          .type(ButtonType.Normal)
           .fontSize(13)
           .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
-          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
           .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
           .borderRadius(14)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
           .onClick(() => {
             if (target === 'reminder') {
               this.reminderOption = option;
@@ -1523,264 +1304,20 @@ struct Index {
       }, (option: string) => `${target}-${option}`)
     }
     .width('100%')
-    .padding({ left: 42, right: 0, bottom: 8 })
-  }
-
-  @Builder
-  private OptionPopup(title: string, options: string[], target: string) {
-    Column() {
-      Blank()
-        .layoutWeight(1)
-        .onClick(() => {
-          if (target === 'reminder') {
-            this.showReminderPopup = false;
-          } else {
-            this.showRepeatPopup = false;
-          }
-        })
-      Column({ space: 10 }) {
-        Text(title)
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding({ top: 16, bottom: 4 })
-
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Center }) {
-          ForEach(options, (option: string) => {
-            Text(option)
-              .fontSize(13)
-              .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
-              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-              .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
-              .borderRadius(14)
-              .margin(4)
-              .onClick(() => {
-                if (target === 'reminder') {
-                  this.reminderOption = option;
-                } else {
-                  this.repeatOption = option;
-                }
-              })
-          }, (option: string) => `${target}-${option}`)
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, bottom: 20 })
-      }
-      .width('90%')
-      .backgroundColor($r('app.color.surface_translucent'))
-      .borderRadius(20)
-      .shadow({ radius: 28, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
-      .backdropBlur(20)
-      Blank()
-        .layoutWeight(1)
-        .onClick(() => {
-          if (target === 'reminder') {
-            this.showReminderPopup = false;
-          } else {
-            this.showRepeatPopup = false;
-          }
-        })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.overlay'))
-  }
-
-  private hourRange(): string[] {
-    const range: string[] = [];
-    for (let h = 0; h < 24; h++) {
-      range.push(h < 10 ? `0${h}` : `${h}`);
-    }
-    return range;
-  }
-
-  private minuteRange(): string[] {
-    const range: string[] = [];
-    for (let m = 0; m < 60; m++) {
-      range.push(m < 10 ? `0${m}` : `${m}`);
-    }
-    return range;
-  }
-
-  @Builder
-  private TimePickerPopup() {
-    Column() {
-      Blank()
-        .layoutWeight(1)
-        .onClick(() => {
-          this.hasDue = true;
-          this.reminderOption = '立刻';
-          this.showTimePopup = false;
-        })
-      Column() {
-        Row() {
-          TextPicker({ range: this.hourRange(), selected: this.selectedDueHour })
-            .onChange((value: string | string[], index: number | number[]) => {
-              this.selectedDueHour = index as number;
-            })
-            .layoutWeight(1)
-            .backgroundColor($r('app.color.surface_input'))
-            .borderRadius(14)
-          Text('时')
-            .fontSize(15)
-            .fontColor($r('app.color.text_secondary'))
-            .padding({ left: 6, right: 10 })
-          TextPicker({ range: this.minuteRange(), selected: this.selectedDueMinute })
-            .onChange((value: string | string[], index: number | number[]) => {
-              this.selectedDueMinute = index as number;
-            })
-            .layoutWeight(1)
-            .backgroundColor($r('app.color.surface_input'))
-            .borderRadius(14)
-          Text('分')
-            .fontSize(15)
-            .fontColor($r('app.color.text_secondary'))
-            .padding({ left: 6, right: 0 })
-        }
-        .width('100%')
-        .padding({ left: 20, right: 20, top: 20, bottom: 16 })
-
-        Divider()
-          .color($r('app.color.divider'))
-          .width('100%')
-
-        Row({ space: 16 }) {
-          Button('取消')
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
-            .backgroundColor($r('app.color.surface'))
-            .borderRadius(20)
-            .height(44)
-            .layoutWeight(1)
-            .onClick(() => this.showTimePopup = false)
-          Button('确定')
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.on_accent'))
-            .backgroundColor($r('app.color.accent'))
-            .borderRadius(20)
-            .height(44)
-            .layoutWeight(1)
-            .onClick(() => {
-              this.hasDue = true;
-              this.reminderOption = '立刻';
-              this.showTimePopup = false;
-            })
-        }
-        .width('100%')
-        .padding({ left: 20, right: 20, top: 14, bottom: 20 })
-      }
-      .width('72%')
-      .backgroundColor($r('app.color.surface_translucent'))
-      .borderRadius(20)
-      .shadow({ radius: 28, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
-      .backdropBlur(20)
-      Blank()
-        .layoutWeight(1)
-        .onClick(() => {
-          this.hasDue = true;
-          this.reminderOption = '立刻';
-          this.showTimePopup = false;
-        })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.overlay'))
-  }
-
-  @Builder
-  private BottomTabItem(index: number, icon: Resource, label: string) {
-    Column({ space: 2 }) {
-      SymbolGlyph(icon)
-        .fontSize(21)
-        .fontColor([this.selectedTabIndex === index ? $r('app.color.accent') : $r('app.color.text_secondary')])
-      Text(label)
-        .fontSize(11)
-        .fontWeight(this.selectedTabIndex === index ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.selectedTabIndex === index ? $r('app.color.accent') : $r('app.color.text_secondary'))
-    }
-    .width(68)
-    .height(48)
-    .justifyContent(FlexAlign.Center)
-    .backgroundColor(this.selectedTabIndex === index ? $r('app.color.accent_soft') : $r('app.color.transparent'))
-    .borderRadius(24)
-    .onClick(() => this.selectedTabIndex = index)
-  }
-
-  @Builder
-  private AddTodoBottomButton() {
-    Stack({ alignContent: Alignment.Center }) {
-      SymbolGlyph($r('sys.symbol.plus'))
-        .fontSize(23)
-        .fontWeight(FontWeight.Bold)
-        .fontColor([$r('app.color.accent')])
-    }
-    .width(58)
-    .height(58)
-    .onClick(() => this.openAddSheet())
-  }
-
-  @Builder
-  private FloatingBottomBar() {
-    Row() {
-      Blank()
-        .width(58)
-
-      Row({ space: 4 }) {
-        this.BottomTabItem(0, $r('sys.symbol.list_bullet'), '首页')
-        this.BottomTabItem(1, $r('sys.symbol.gearshape'), '设置')
-      }
-      .height(58)
-      .padding({ left: 6, right: 6 })
-      .backgroundColor('#DDF9FAFC')
-      .borderRadius(29)
-      .backdropBlur(24)
-      .shadow({ radius: 14, color: $r('app.color.shadow'), offsetX: 0, offsetY: 6 })
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-
-      Button() {
-        this.AddTodoBottomButton()
-      }
-      .type(ButtonType.Normal)
-      .width(58)
-      .height(58)
-      .backgroundColor('#DDF9FAFC')
-      .borderRadius(29)
-      .backdropBlur(24)
-      .shadow({ radius: 14, color: $r('app.color.shadow'), offsetX: 0, offsetY: 6 })
-    }
-    .width('100%')
-    .height(58)
-    .padding({ left: 22, right: 22, bottom: 44 })
-    .backgroundColor($r('app.color.transparent'))
-  }
-
-  @Builder
-  private BottomImmersiveMask() {
-    Column()
-      .width('100%')
-      .height(124)
-      .linearGradient({
-        angle: 180,
-        colors: [
-          [$r('app.color.transparent'), 0.0],
-          [$r('app.color.page_background'), 0.78],
-          [$r('app.color.page_background'), 1.0]
-        ]
-      })
+    .padding({ left: 0, right: 0, bottom: 8 })
   }
 
   build() {
-    Stack({ alignContent: Alignment.BottomEnd }) {
+    RelativeContainer() {
       Column()
         .width('100%')
         .height('100%')
         .backgroundColor($r('app.color.page_background'))
         .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          left: { anchor: '__container__', align: HorizontalAlign.Start }
+        })
 
       Column() {
         if (this.configured) {
@@ -1791,11 +1328,12 @@ struct Index {
               .fontColor($r('app.color.text_primary'))
               .layoutWeight(1)
 
-            Stack({ alignContent: Alignment.Center }) {
+            Button() {
               SymbolGlyph(this.searchQuery.length > 0 ? $r('sys.symbol.xmark') : $r('sys.symbol.magnifyingglass'))
                 .fontSize(16)
                 .fontColor([$r('app.color.text_tertiary')])
             }
+            .type(ButtonType.Normal)
             .width(38)
             .height(38)
             .backgroundColor($r('app.color.icon_background'))
@@ -1823,39 +1361,63 @@ struct Index {
               .margin({ left: 22, right: 22, bottom: 4 })
           }
 
-          if (this.selectedTabIndex === 0) {
-            Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
-              Scroll() {
+          HdsTabs({ controller: this.hdsController }) {
+            TabContent() {
+              Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
                 Column() {
                   this.HomeView()
+                }
+                .width('100%')
+                .height('100%')
+                .backgroundColor($r('app.color.page_background'))
+                .onAreaChange((_oldValue: Area, newValue: Area) => {
+                  const h = newValue.height;
+                  if (typeof h === 'number') {
+                    this.homeViewportHeight = h;
+                  }
+                })
+              }
+              .width('100%')
+              .height('100%')
+              .pullToRefresh(this.configured)
+              .refreshOffset(64)
+              .onRefreshing(() => {
+                this.refreshFromPull();
+              })
+            }
+            .tabBar(this.homeTabBar)
+
+            TabContent() {
+              Scroll() {
+                Column() {
+                  this.SettingsView()
                 }
                 .width('100%')
                 .backgroundColor($r('app.color.page_background'))
               }
               .width('100%')
+              .height('100%')
               .scrollBar(BarState.Auto)
               .align(Alignment.TopStart)
             }
-            .layoutWeight(1)
-            .width('100%')
-            .pullToRefresh(this.configured && this.selectedTabIndex === 0)
-            .refreshOffset(64)
-            .onRefreshing(() => {
-              this.refreshFromPull();
-            })
-          } else {
-            Scroll() {
-              Column() {
-                this.SettingsView()
-              }
-              .width('100%')
-              .backgroundColor($r('app.color.page_background'))
-            }
-            .layoutWeight(1)
-            .width('100%')
-            .scrollBar(BarState.Auto)
-            .align(Alignment.TopStart)
+            .tabBar(this.settingsTabBar)
           }
+          .barPosition(BarPosition.End)
+          .barOverlap(true)
+          .barFloatingStyle({
+            barBottomMargin: 24,
+            adaptToHandedness: true,
+            lightColor: $r('app.color.accent'),
+            systemMaterialEffect: {
+              materialType: hdsMaterial.MaterialType.IMMERSIVE,
+              materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
+            }
+          })
+          .onChange((index: number) => {
+            this.selectedTabIndex = index;
+          })
+          .layoutWeight(1)
+          .width('100%')
         } else {
           Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
             Scroll() {
@@ -1877,31 +1439,61 @@ struct Index {
       }
       .width('100%')
       .height('100%')
+      .alignRules({
+        top: { anchor: '__container__', align: VerticalAlign.Top },
+        left: { anchor: '__container__', align: HorizontalAlign.Start }
+      })
 
       if (this.configured) {
-        this.BottomImmersiveMask()
-        this.FloatingBottomBar()
+        if (this.selectedTabIndex === 0) {
+          Button() {
+            SymbolGlyph($r('sys.symbol.plus'))
+              .fontSize(24)
+              .fontWeight(FontWeight.Bold)
+              .fontColor([$r('app.color.on_accent')])
+          }
+          .type(ButtonType.Normal)
+          .width(56)
+          .height(56)
+          .borderRadius(28)
+          .backgroundColor($r('app.color.accent'))
+          .shadow({ radius: 18, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
+          .alignRules(this.fabAlignRules)
+          .margin({ left: 22, right: 22, bottom: 96 })
+          .onClick(() => this.openAddSheet())
+        }
       }
 
-      if (this.showAddSheet) {
-        this.AddTaskSheet()
-      }
+      Column()
+        .width(0)
+        .height(0)
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          left: { anchor: '__container__', align: HorizontalAlign.Start }
+        })
+        .bindSheet($$this.showAddSheet, this.AddTaskSheetContent(), {
+          detents: [SheetSize.FIT_CONTENT, SheetSize.LARGE],
+          backgroundColor: $r('app.color.surface_translucent'),
+          blurStyle: BlurStyle.COMPONENT_THIN,
+          showClose: false
+        })
 
-      if (this.showEditSheet) {
-        this.EditTaskSheet()
-      }
-
-      if (this.showReminderPopup) {
-        this.OptionPopup('提醒', this.reminderOptions(), 'reminder')
-      }
-
-      if (this.showRepeatPopup) {
-        this.OptionPopup('重复', this.repeatOptions(), 'repeat')
-      }
-
-      if (this.showTimePopup) {
-        this.TimePickerPopup()
-      }
+      Column()
+        .width(0)
+        .height(0)
+        .alignRules({
+          top: { anchor: '__container__', align: VerticalAlign.Top },
+          left: { anchor: '__container__', align: HorizontalAlign.Start }
+        })
+        .bindSheet($$this.showEditSheet, this.EditTaskSheetContent(), {
+          detents: [SheetSize.FIT_CONTENT, SheetSize.LARGE],
+          backgroundColor: $r('app.color.surface_translucent'),
+          blurStyle: BlurStyle.COMPONENT_THIN,
+          showClose: false,
+          onDisappear: () => {
+            this.editingTask = null;
+          }
+        })
     }
     .height('100%')
     .width('100%')
