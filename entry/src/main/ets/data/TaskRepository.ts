@@ -21,7 +21,7 @@ function num(value: relationalStore.ValueType): number {
 }
 
 function widgetBlurStyle(value: string): WidgetBlurStyle {
-  if (value === 'none' || value === 'thin' || value === 'thick') {
+  if (value === 'none' || value === 'thin' || value === 'regular' || value === 'thick') {
     return value;
   }
   return 'thin';

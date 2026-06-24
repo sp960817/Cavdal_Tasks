@@ -419,21 +419,6 @@ struct Index {
     }
   }
 
-  private async runReminderDiagnostics(): Promise<void> {
-    this.loading = true;
-    this.statusText = '正在执行提醒自检';
-    try {
-      await this.ensureReminderNotifications(true);
-      const report = await this.syncService.runReminderDiagnostics();
-      this.statusText = report;
-      this.safeShowToast('提醒自检完成');
-    } catch (err) {
-      this.statusText = `提醒自检失败：${JSON.stringify(err)}`;
-      this.safeShowToast('提醒自检失败');
-    }
-    this.loading = false;
-  }
-
   private widgetBlurLabel(style: WidgetBlurStyle): string {
     if (style === 'none') return '通透';
     if (style === 'thin') return '轻薄';
@@ -478,6 +463,20 @@ struct Index {
         }, (style: WidgetBlurStyle) => style)
       }
       .width('100%')
+    }
+    .width('100%')
+    .padding(14)
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(14)
+  }
+
+  @Builder
+  private ServerSettingsMenu() {
+    Column({ space: 10 }) {
+      this.SettingRow($r('sys.symbol.cloud'), 'Cavdal 服务器设置', this.configured ? this.username : '未配置', 'server')
+      if (this.settingPanel === 'server' || !this.configured) {
+        this.SetupView()
+      }
     }
     .width('100%')
     .padding(14)
@@ -719,9 +718,9 @@ struct Index {
           .fontSize(15)
           .fontColor($r('app.color.text_tertiary'))
           .margin({ right: 8 })
-        Text(this.showCompleted ? '⌃' : '⌄')
-          .fontSize(20)
-          .fontColor($r('app.color.text_disabled'))
+        SymbolGlyph(this.showCompleted ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize(18)
+          .fontColor([$r('app.color.text_disabled')])
       }
       .width('100%')
       .height(34)
@@ -783,13 +782,10 @@ struct Index {
   private MainView() {
     Column({ space: 14 }) {
       if (this.showSettings) {
-        this.SetupView()
+        this.ServerSettingsMenu()
         this.WidgetAppearanceSettings()
         Button('立即同步')
           .onClick(() => this.syncNow())
-          .width('100%')
-        Button('提醒自检')
-          .onClick(() => this.runReminderDiagnostics())
           .width('100%')
         Button('清空本地缓存')
           .fontColor($r('app.color.danger_text'))
@@ -954,12 +950,14 @@ struct Index {
 
       Column({ space: 12 }) {
         Row() {
-          Button('×')
+          Button() {
+            SymbolGlyph($r('sys.symbol.xmark'))
+              .fontSize(23)
+              .fontColor([$r('app.color.text_primary')])
+          }
             .type(ButtonType.Normal)
             .width(46)
             .height(46)
-            .fontSize(27)
-            .fontColor($r('app.color.text_primary'))
             .backgroundColor($r('app.color.surface_input'))
             .borderRadius(23)
             .border({ width: 1, color: $r('app.color.divider') })
@@ -973,11 +971,13 @@ struct Index {
             .textAlign(TextAlign.Center)
             .layoutWeight(1)
 
-          Button('✓')
+          Button() {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(22)
+              .fontColor([$r('app.color.on_accent')])
+          }
             .width(46)
             .height(46)
-            .fontSize(23)
-            .fontColor($r('app.color.on_accent'))
             .backgroundColor($r('app.color.accent'))
             .borderRadius(23)
             .shadow({ radius: 16, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
@@ -1269,11 +1269,10 @@ struct Index {
   private CalendarPanel() {
     Column({ space: 8 }) {
       Row() {
-        Text('‹')
-          .fontSize(28)
-          .fontColor($r('app.color.text_tertiary'))
+        SymbolGlyph($r('sys.symbol.chevron_left'))
+          .fontSize(24)
+          .fontColor([$r('app.color.text_tertiary')])
           .width(38)
-          .textAlign(TextAlign.Start)
           .onClick(() => this.changeMonth(-1))
         Text(this.monthTitle())
           .fontSize(20)
@@ -1281,11 +1280,10 @@ struct Index {
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
-        Text('›')
-          .fontSize(28)
-          .fontColor($r('app.color.text_tertiary'))
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(24)
+          .fontColor([$r('app.color.text_tertiary')])
           .width(38)
-          .textAlign(TextAlign.End)
           .onClick(() => this.changeMonth(1))
       }
       .width('100%')
@@ -1367,11 +1365,10 @@ struct Index {
   private DateTimePanel() {
     Column() {
       Row({ space: 12 }) {
-        Text('◷')
+        SymbolGlyph($r('sys.symbol.clock'))
           .fontSize(21)
-          .fontColor($r('app.color.text_secondary'))
+          .fontColor([$r('app.color.text_secondary')])
           .width(30)
-          .textAlign(TextAlign.Center)
         Text('时间')
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
@@ -1382,9 +1379,9 @@ struct Index {
           .fontColor($r('app.color.text_secondary'))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('×')
-          .fontSize(17)
-          .fontColor(this.hasDue ? $r('app.color.text_disabled') : $r('app.color.divider'))
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(15)
+          .fontColor([this.hasDue ? $r('app.color.text_disabled') : $r('app.color.divider')])
           .onClick(() => {
             const now = new Date();
             this.selectedDueHour = now.getHours();
@@ -1404,11 +1401,10 @@ struct Index {
         .color($r('app.color.divider'))
         .margin({ left: 42 })
       Row({ space: 12 }) {
-        Text('◴')
+        SymbolGlyph($r('sys.symbol.alarm'))
           .fontSize(21)
-          .fontColor($r('app.color.text_secondary'))
+          .fontColor([$r('app.color.text_secondary')])
           .width(30)
-          .textAlign(TextAlign.Center)
         Text('提醒')
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
@@ -1417,9 +1413,9 @@ struct Index {
         Text(this.reminderOption)
           .fontSize(15)
           .fontColor($r('app.color.text_secondary'))
-        Text('×')
-          .fontSize(17)
-          .fontColor(this.reminderOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider'))
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(15)
+          .fontColor([this.reminderOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider')])
           .onClick(() => {
             this.reminderOption = '无';
           })
@@ -1436,11 +1432,10 @@ struct Index {
         .color($r('app.color.divider'))
         .margin({ left: 42 })
       Row({ space: 12 }) {
-        Text('↻')
+        SymbolGlyph($r('sys.symbol.repeat'))
           .fontSize(21)
-          .fontColor($r('app.color.text_secondary'))
+          .fontColor([$r('app.color.text_secondary')])
           .width(30)
-          .textAlign(TextAlign.Center)
         Text('重复')
           .fontSize(17)
           .fontWeight(FontWeight.Medium)
@@ -1449,9 +1444,9 @@ struct Index {
         Text(this.repeatOption)
           .fontSize(15)
           .fontColor($r('app.color.text_secondary'))
-        Text('×')
-          .fontSize(17)
-          .fontColor(this.repeatOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider'))
+        SymbolGlyph($r('sys.symbol.xmark'))
+          .fontSize(15)
+          .fontColor([this.repeatOption !== '无' ? $r('app.color.text_disabled') : $r('app.color.divider')])
           .onClick(() => {
             this.repeatOption = '无';
           })
@@ -1472,13 +1467,12 @@ struct Index {
   }
 
   @Builder
-  private SettingRow(icon: string, label: string, value: string, target: string) {
+  private SettingRow(icon: Resource, label: string, value: string, target: string) {
     Row({ space: 12 }) {
-      Text(icon)
+      SymbolGlyph(icon)
         .fontSize(21)
-        .fontColor($r('app.color.text_secondary'))
+        .fontColor([$r('app.color.text_secondary')])
         .width(30)
-        .textAlign(TextAlign.Center)
       Text(label)
         .fontSize(17)
         .fontWeight(FontWeight.Medium)
@@ -1490,9 +1484,9 @@ struct Index {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       if (target.length > 0) {
-        Text(this.settingPanel === target ? '⌃' : '⌄')
-          .fontSize(17)
-          .fontColor($r('app.color.text_disabled'))
+        SymbolGlyph(this.settingPanel === target ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize(16)
+          .fontColor([$r('app.color.text_disabled')])
       }
     }
     .height(46)
@@ -1710,9 +1704,9 @@ struct Index {
               .layoutWeight(1)
 
             Stack({ alignContent: Alignment.Center }) {
-              Text(this.searchQuery.length > 0 ? '✕' : '🔍')
+              SymbolGlyph(this.searchQuery.length > 0 ? $r('sys.symbol.xmark') : $r('sys.symbol.magnifyingglass'))
                 .fontSize(16)
-                .fontColor($r('app.color.text_tertiary'))
+                .fontColor([$r('app.color.text_tertiary')])
             }
             .width(38)
             .height(38)
@@ -1790,10 +1784,12 @@ struct Index {
       .height('100%')
 
       if (this.configured && !this.showSettings) {
-        Button('+')
-          .fontSize(40)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.on_accent'))
+        Button() {
+          SymbolGlyph($r('sys.symbol.plus'))
+            .fontSize(36)
+            .fontWeight(FontWeight.Bold)
+            .fontColor([$r('app.color.on_accent')])
+        }
           .backgroundColor($r('app.color.accent'))
           .width(72)
           .height(72)

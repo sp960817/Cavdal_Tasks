@@ -4,7 +4,7 @@ import { CalDavClient } from '../caldav/CalDavClient';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { AccountSettings, CalendarSource, SyncOperation, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { CredentialStore, SettingsStore, TaskRepository } from '../data/TaskRepository';
-import { ReminderService, ReminderSyncSummary } from '../reminder/ReminderService';
+import { ReminderService } from '../reminder/ReminderService';
 import { WidgetUpdater } from '../widget/WidgetUpdater';
 
 const LOG_DOMAIN = 0x0000;
@@ -46,12 +46,6 @@ export class SyncService {
 
   async syncLocalReminders(): Promise<void> {
     await this.refreshReminders();
-  }
-
-  async runReminderDiagnostics(): Promise<string> {
-    const tasks = await this.repository.activeTasks();
-    const summary = await this.reminderService.syncTasks(tasks);
-    return this.formatReminderDiagnostics(summary);
   }
 
   private async getClient(): Promise<{ client: CalDavClient; settings: AccountSettings; ok: boolean }> {
@@ -413,39 +407,4 @@ export class SyncService {
     return failures;
   }
 
-  private formatReminderDiagnostics(summary: ReminderSyncSummary): string {
-    const lines: string[] = [
-      `通知开关：${summary.notificationsEnabled ? '已开启' : '未开启'}`,
-      `进行中待办：${summary.activeTaskCount}`,
-      `带提醒待办：${summary.reminderTaskCount}`,
-      `发布结果：成功 ${summary.publishedCount} / 跳过 ${summary.skippedCount} / 失败 ${summary.failedCount}`,
-      `清理前系统提醒：${summary.beforeClearCount < 0 ? '读取失败' : summary.beforeClearCount}`,
-      `清理后系统提醒：${summary.afterClearCount < 0 ? '读取失败' : summary.afterClearCount}`,
-      `系统已注册提醒：${summary.registeredCount}`
-    ];
-    const published = summary.publishResults.filter((item) => item.status !== 'skipped').slice(0, 5);
-    if (published.length > 0) {
-      lines.push('待办提醒：');
-      for (let i = 0; i < published.length; i++) {
-        const item = published[i];
-        lines.push(`- 《${item.title}》 ${item.triggerAt} ${item.detail}`);
-      }
-    }
-    if (summary.registeredResults.length > 0) {
-      lines.push('系统提醒：');
-      for (let i = 0; i < Math.min(summary.registeredResults.length, 5); i++) {
-        lines.push(`- ${summary.registeredResults[i]}`);
-      }
-    }
-    if (summary.errors.length > 0) {
-      lines.push('异常：');
-      for (let i = 0; i < Math.min(summary.errors.length, 3); i++) {
-        lines.push(`- ${summary.errors[i]}`);
-      }
-    }
-    if (summary.reminderTaskCount > 0 && summary.registeredCount === 0) {
-      lines.push('结论：应用有提醒任务，但系统里没有注册成功。');
-    }
-    return lines.join('\n');
-  }
 }

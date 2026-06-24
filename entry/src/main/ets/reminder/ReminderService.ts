@@ -267,12 +267,12 @@ export class ReminderService {
       tapDismissed: true,
       actionButton: [
         {
-          title: '完成',
-          type: reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_SNOOZE
-        },
-        {
           title: '知道了',
           type: reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_CLOSE
+        },
+        {
+          title: '完成',
+          type: reminderAgentManager.ActionButtonType.ACTION_BUTTON_TYPE_SNOOZE
         }
       ],
       wantAgent: {

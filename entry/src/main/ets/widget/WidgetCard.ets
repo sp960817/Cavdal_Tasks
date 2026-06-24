@@ -22,9 +22,19 @@ function blurStyleFor(style: string): BlurStyle {
     return BlurStyle.BACKGROUND_REGULAR;
   }
   if (style === 'thick') {
-    return BlurStyle.BACKGROUND_THICK;
+    return BlurStyle.NONE;
   }
   return BlurStyle.NONE;
+}
+
+function backgroundColorFor(style: string): string {
+  if (style === 'thin') {
+    return '#1AFFFFFF';
+  }
+  if (style === 'thick') {
+    return '#FFFFFFFF';
+  }
+  return '#00000000';
 }
 
 function opaqueColor(color: string): string {
@@ -53,6 +63,9 @@ struct WidgetCard {
   }
 
   private tc(): string {
+    if (this.widgetBlurStyle === 'thick') {
+      return '#FF000000';
+    }
     return opaqueColor(this.textColor);
   }
 
@@ -164,7 +177,7 @@ struct WidgetCard {
     .width('100%')
     .height('100%')
     .padding(16)
-    .backgroundColor(Color.Transparent)
+    .backgroundColor(backgroundColorFor(this.widgetBlurStyle))
     .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
     .onClick(() => this.openApp())
   }
