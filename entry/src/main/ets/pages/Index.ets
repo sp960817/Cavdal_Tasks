@@ -722,22 +722,21 @@ struct Index {
   @Builder
   private CompletedTasksCard() {
     Column() {
-      Row() {
+      Row({ space: 8 }) {
         Text('已完成')
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_tertiary'))
-          .layoutWeight(1)
         Text(`${this.completed.length}`)
           .fontSize(15)
           .fontColor($r('app.color.text_tertiary'))
-          .margin({ right: 8 })
         SymbolGlyph(this.effectiveCompletedOpen() ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
           .fontSize(18)
           .fontColor([$r('app.color.text_disabled')])
       }
       .width('100%')
       .height(34)
+      .justifyContent(FlexAlign.Center)
       .margin({ bottom: this.effectiveCompletedOpen() ? 8 : 0 })
       .onClick(() => {
         this.showCompleted = !this.effectiveCompletedOpen();
