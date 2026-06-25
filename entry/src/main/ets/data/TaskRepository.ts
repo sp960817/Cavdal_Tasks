@@ -3,10 +3,13 @@ import { preferences, relationalStore } from '@kit.ArkData';
 import asset from '@ohos.security.asset';
 import { AccountSettings, CalendarSource, SyncOperation, TodoTask, WidgetBlurStyle, WidgetPayload, WidgetTask } from '../model/TaskModels';
 import { VTodoCodec } from '../caldav/VTodoCodec';
+import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 
 const DB_NAME = 'cavdal_tasks.db';
 const PREF_NAME = 'cavdal_settings';
 const PASSWORD_ALIAS = 'cavdal-password';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WIDGET_DAY_WINDOW = 7;
 
 function str(value: relationalStore.ValueType): string {
   return value === null || value === undefined ? '' : `${value}`;
@@ -25,6 +28,27 @@ function widgetBlurStyle(value: string): WidgetBlurStyle {
     return value;
   }
   return 'thin';
+}
+
+function beijingDayIndex(year: number, month: number, day: number): number {
+  return Math.floor(Date.UTC(year, month - 1, day) / DAY_MS);
+}
+
+function currentBeijingDayIndex(): number {
+  const shifted = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return beijingDayIndex(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+}
+
+function shouldShowInWidget(task: TodoTask, today: number): boolean {
+  if (task.due.trim().length === 0) {
+    return true;
+  }
+  const due = parseDueAsBeijing(task.due);
+  if (due === undefined) {
+    return true;
+  }
+  const delta = beijingDayIndex(due.year, due.month, due.day) - today;
+  return delta >= -WIDGET_DAY_WINDOW && delta <= WIDGET_DAY_WINDOW;
 }
 
 function encode(value: string): Uint8Array {
@@ -502,7 +526,8 @@ export class TaskRepository {
   async widgetPayload(lastSyncAt: number): Promise<WidgetPayload> {
     const active = await this.activeTasks();
     const pending = await this.pendingCount();
-    const tasks: WidgetTask[] = active.slice(0, 20).map((task: TodoTask): WidgetTask => ({
+    const today = currentBeijingDayIndex();
+    const tasks: WidgetTask[] = active.filter((task: TodoTask): boolean => shouldShowInWidget(task, today)).slice(0, 20).map((task: TodoTask): WidgetTask => ({
       id: task.id,
       title: task.title,
       due: task.due,

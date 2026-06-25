@@ -49,7 +49,7 @@ let storage = new LocalStorage();
 @Entry(storage)
 @Component
 struct WidgetCard {
-  @LocalStorageProp('tasksJson') tasksJson: string = '[]';
+  @LocalStorageProp('tasksJson') @Watch('onTasksJsonChange') tasksJson: string = '[]';
   @LocalStorageProp('pendingCount') pendingCount: string = '0';
   @LocalStorageProp('lastSyncText') lastSyncText: string = '未同步';
   @LocalStorageProp('widgetBlurStyle') @Watch('onBlurStyleChange') widgetBlurStyle: string = 'thin';
@@ -60,6 +60,10 @@ struct WidgetCard {
   }
 
   private onBlurStyleChange(): void {
+  }
+
+  private onTasksJsonChange(): void {
+    this.completingId = '';
   }
 
   private tc(): string {
