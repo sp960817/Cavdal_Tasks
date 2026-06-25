@@ -478,7 +478,9 @@ struct Index {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor($r('app.color.surface'))
+    .backgroundColor($r('app.color.surface_translucent'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
     .borderRadius(14)
   }
 
@@ -492,7 +494,9 @@ struct Index {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor($r('app.color.surface'))
+    .backgroundColor($r('app.color.surface_translucent'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
     .borderRadius(14)
   }
 
@@ -625,8 +629,8 @@ struct Index {
       }
     }
     .width('100%')
-    .height(44)
-    .padding({ left: 0, right: 2 })
+    .height(task.syncState !== 'synced' ? 58 : 44)
+    .padding({ left: 0, right: 12 })
     .justifyContent(FlexAlign.Center)
   }
 
@@ -662,7 +666,7 @@ struct Index {
     }
     .width('100%')
     .height(40)
-    .padding({ left: 0, right: 2 })
+    .padding({ left: 0, right: 12 })
     .alignItems(VerticalAlign.Center)
   }
 
@@ -699,13 +703,16 @@ struct Index {
         .width('100%')
         .layoutWeight(1)
         .scrollBar(BarState.Auto)
+        .edgeEffect(EdgeEffect.Spring)
         .align(Alignment.TopStart)
       }
     }
     .width('100%')
     .height(this.computeActiveCardHeight())
-    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-    .backgroundColor($r('app.color.surface'))
+    .padding({ left: 16, right: 8, top: 10, bottom: 10 })
+    .backgroundColor($r('app.color.surface_translucent'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
     .borderRadius(18)
   }
 
@@ -782,14 +789,17 @@ struct Index {
           .width('100%')
           .layoutWeight(1)
           .scrollBar(BarState.Auto)
+          .edgeEffect(EdgeEffect.Spring)
           .align(Alignment.TopStart)
         }
       }
     }
     .width('100%')
     .height(this.computeCompletedCardHeight())
-    .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-    .backgroundColor($r('app.color.surface'))
+    .padding({ left: 16, right: 8, top: 12, bottom: 12 })
+    .backgroundColor($r('app.color.surface_translucent'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
     .borderRadius(18)
   }
 
@@ -884,15 +894,27 @@ struct Index {
       }
       .width('100%')
       .padding(14)
-      .backgroundColor($r('app.color.surface'))
+      .backgroundColor($r('app.color.surface_translucent'))
+      .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+      .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
       .borderRadius(14)
 
       Button('立即同步')
+        .height(44)
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.on_accent'))
+        .backgroundColor($r('app.color.accent'))
+        .borderRadius(22)
         .onClick(() => this.syncNow())
         .width('100%')
       Button('清空本地缓存')
+        .height(44)
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.danger_text'))
-        .backgroundColor($r('app.color.surface'))
+        .backgroundColor($r('app.color.surface_translucent'))
+        .border({ width: 1, color: $r('app.color.danger_text') })
         .borderRadius(22)
         .onClick(() => this.clearLocal())
         .width('100%')
@@ -935,12 +957,15 @@ struct Index {
         }
         .layoutWeight(1)
         .alignItems(HorizontalAlign.Start)
+
         Button('添加')
-          .fontSize(14)
+          .height(38)
+          .padding({ left: 18, right: 18 })
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.on_accent'))
           .backgroundColor($r('app.color.accent'))
-          .borderRadius(18)
-          .height(36)
+          .borderRadius(19)
           .onClick(() => this.addTask())
       }
       .width('100%')
@@ -970,7 +995,8 @@ struct Index {
           .type(ButtonType.Normal)
           .width(42)
           .height(42)
-          .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+          .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
           .borderRadius(21)
           .onClick(() => this.showDatePicker())
 
@@ -984,7 +1010,8 @@ struct Index {
             .type(ButtonType.Normal)
             .width(42)
             .height(42)
-            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+            .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
             .borderRadius(21)
             .onClick(() => this.showTimePicker())
           }
@@ -998,7 +1025,8 @@ struct Index {
           .type(ButtonType.Normal)
           .width(42)
           .height(42)
-          .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+          .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
           .borderRadius(21)
           .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
 
@@ -1011,7 +1039,8 @@ struct Index {
           .type(ButtonType.Normal)
           .width(42)
           .height(42)
-          .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+          .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+          .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
           .borderRadius(21)
           .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
         }
@@ -1023,8 +1052,11 @@ struct Index {
           .height(42)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.on_accent'))
-          .backgroundColor($r('app.color.accent'))
+          .padding({ left: 18, right: 18 })
+          .fontColor($r('app.color.text_secondary'))
+          .backgroundColor($r('app.color.surface_translucent'))
+          .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+          .border({ width: 1, color: $r('app.color.bar_glass_edge') })
           .borderRadius(21)
           .onClick(() => {
             this.showAddSheet = false;
@@ -1055,11 +1087,13 @@ struct Index {
             .fontColor($r('app.color.text_primary'))
             .layoutWeight(1)
           Button('完成')
-            .fontSize(14)
+            .height(38)
+            .padding({ left: 18, right: 18 })
+            .fontSize(15)
+            .fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.on_accent'))
             .backgroundColor($r('app.color.accent'))
-            .borderRadius(18)
-            .height(36)
+            .borderRadius(19)
             .onClick(() => {
               this.saveEdit();
             })
@@ -1095,7 +1129,8 @@ struct Index {
             .type(ButtonType.Normal)
             .width(42)
             .height(42)
-            .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.accent_soft'))
+            .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+            .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
             .borderRadius(21)
             .onClick(() => this.showDatePicker())
 
@@ -1109,7 +1144,8 @@ struct Index {
               .type(ButtonType.Normal)
               .width(42)
               .height(42)
-              .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+              .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+              .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
               .borderRadius(21)
               .onClick(() => this.showTimePicker())
             }
@@ -1123,7 +1159,8 @@ struct Index {
             .type(ButtonType.Normal)
             .width(42)
             .height(42)
-            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+            .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
             .borderRadius(21)
             .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
 
@@ -1136,7 +1173,8 @@ struct Index {
             .type(ButtonType.Normal)
             .width(42)
             .height(42)
-            .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.accent_soft'))
+            .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
+            .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
             .borderRadius(21)
             .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
           }
@@ -1150,8 +1188,11 @@ struct Index {
             .height(42)
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.on_accent'))
-            .backgroundColor($r('app.color.accent'))
+            .padding({ left: 18, right: 18 })
+            .fontColor($r('app.color.text_secondary'))
+            .backgroundColor($r('app.color.surface_translucent'))
+            .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+            .border({ width: 1, color: $r('app.color.bar_glass_edge') })
             .borderRadius(21)
             .onClick(() => {
               this.showEditSheet = false;
@@ -1292,26 +1333,32 @@ struct Index {
 
   @Builder
   private OptionChips(options: string[], target: string) {
-    Row({ space: 8 }) {
-      ForEach(options, (option: string) => {
-        Button(option)
-          .type(ButtonType.Normal)
-          .fontSize(13)
-          .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
-          .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
-          .borderRadius(14)
-          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-          .onClick(() => {
-            if (target === 'reminder') {
-              this.reminderOption = option;
-            } else {
-              this.repeatOption = option;
-            }
-          })
-      }, (option: string) => `${target}-${option}`)
+    Scroll() {
+      Row({ space: 8 }) {
+        ForEach(options, (option: string) => {
+          Button(option)
+            .type(ButtonType.Normal)
+            .fontSize(13)
+            .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
+            .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
+            .borderRadius(16)
+            .height(32)
+            .padding({ left: 12, right: 12 })
+            .onClick(() => {
+              if (target === 'reminder') {
+                this.reminderOption = option;
+              } else {
+                this.repeatOption = option;
+              }
+            })
+        }, (option: string) => `${target}-${option}`)
+      }
+      .padding({ left: 0, right: 0, bottom: 8 })
     }
     .width('100%')
-    .padding({ left: 0, right: 0, bottom: 8 })
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
+    .edgeEffect(EdgeEffect.Spring)
   }
 
   build() {
@@ -1337,14 +1384,16 @@ struct Index {
 
             Button() {
               SymbolGlyph(this.searchQuery.length > 0 ? $r('sys.symbol.xmark') : $r('sys.symbol.magnifyingglass'))
-                .fontSize(16)
-                .fontColor([$r('app.color.text_tertiary')])
+                .fontSize(18)
+                .fontColor([this.showSearch || this.searchQuery.length > 0 ? $r('app.color.accent') : $r('app.color.text_secondary')])
             }
             .type(ButtonType.Normal)
-            .width(38)
-            .height(38)
-            .backgroundColor($r('app.color.icon_background'))
-            .borderRadius(19)
+            .width(44)
+            .height(44)
+            .backgroundColor($r('app.color.surface_translucent'))
+            .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
+            .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
+            .borderRadius(22)
             .margin({ right: 8 })
             .onClick(() => {
               if (this.searchQuery.length > 0) {
@@ -1466,6 +1515,8 @@ struct Index {
           .borderRadius(28)
           .backgroundColor($r('app.color.accent'))
           .shadow({ radius: 18, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
+          .scale({ x: this.showAddSheet ? 0.94 : 1, y: this.showAddSheet ? 0.94 : 1 })
+          .animation({ duration: 160, curve: Curve.EaseOut })
           .alignRules(this.fabAlignRules)
           .margin({ left: 22, right: 22, bottom: 96 })
           .onClick(() => this.openAddSheet())

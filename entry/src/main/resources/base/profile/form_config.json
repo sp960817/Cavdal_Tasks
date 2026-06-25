@@ -18,7 +18,9 @@
       "updateEnabled": true,
       "updateDuration": 1,
       "renderingMode": "fullColor",
-      "transparencyEnabled": true
+      "transparencyEnabled": true,
+      "resizable": true,
+      "groupId": "1"
     }
   ]
 }

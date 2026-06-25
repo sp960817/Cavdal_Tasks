@@ -127,7 +127,7 @@ struct WidgetCard {
           ForEach(this.cardTasks, (task: CardTask) => {
             ListItem() {
               Row({ space: 6 }) {
-                Stack() {
+                Stack({ alignContent: Alignment.Center }) {
                   Text('')
                     .width(18)
                     .height(18)
@@ -148,8 +148,8 @@ struct WidgetCard {
                     })
                     .animation({ duration: 500, curve: Curve.EaseOut })
                 }
-                .width(18)
-                .height(18)
+                .width(30)
+                .height(30)
                 .onClick(() => this.completeTask(task))
 
                 Text(task.title)
