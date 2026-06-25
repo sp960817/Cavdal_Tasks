@@ -14,7 +14,7 @@
       "isDefault": true,
       "isDynamic": true,
       "defaultDimension": "2*2",
-      "supportDimensions": ["2*2", "2*4"],
+      "supportDimensions": ["1*2", "2*2", "2*4"],
       "updateEnabled": true,
       "updateDuration": 1,
       "renderingMode": "fullColor",

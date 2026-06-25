@@ -16,6 +16,8 @@ export interface SyncResultSummary {
   imported: number;
 }
 
+let syncNowInFlight: Promise<SyncResultSummary> | undefined = undefined;
+
 export class SyncService {
   private repository: TaskRepository;
   private settings: SettingsStore;
@@ -118,6 +120,18 @@ export class SyncService {
   }
 
   async syncNow(): Promise<SyncResultSummary> {
+    if (syncNowInFlight !== undefined) {
+      return syncNowInFlight;
+    }
+    syncNowInFlight = this.doSyncNow();
+    try {
+      return await syncNowInFlight;
+    } finally {
+      syncNowInFlight = undefined;
+    }
+  }
+
+  private async doSyncNow(): Promise<SyncResultSummary> {
     let client: CalDavClient;
     let settings: AccountSettings;
     try {
@@ -159,7 +173,7 @@ export class SyncService {
       }
       return { ok: false, message: `${flushErrors} 个离线操作待重试，拉取失败：${text}`, imported: 0 };
     }
-    await this.repository.saveTasks(tasks);
+    await this.repository.saveRemoteSnapshot(settings.calendarHref, tasks);
     settings.lastSyncAt = Date.now();
     await this.settings.save(settings);
     await this.refreshReminders();

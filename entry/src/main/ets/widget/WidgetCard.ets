@@ -22,7 +22,7 @@ function blurStyleFor(style: string): BlurStyle {
     return BlurStyle.BACKGROUND_REGULAR;
   }
   if (style === 'thick') {
-    return BlurStyle.NONE;
+    return BlurStyle.BACKGROUND_THICK;
   }
   return BlurStyle.NONE;
 }
@@ -31,8 +31,11 @@ function backgroundColorFor(style: string): string {
   if (style === 'thin') {
     return '#1AFFFFFF';
   }
+  if (style === 'regular') {
+    return '#26FFFFFF';
+  }
   if (style === 'thick') {
-    return '#FFFFFFFF';
+    return '#99FFFFFF';
   }
   return '#00000000';
 }
@@ -55,6 +58,11 @@ struct WidgetCard {
   @LocalStorageProp('widgetBlurStyle') @Watch('onBlurStyleChange') widgetBlurStyle: string = 'thin';
   @LocalStorageProp('textColor') @Watch('onTextColorChange') textColor: string = '#E6000000';
   @State completingId: string = '';
+  @State cardTasks: CardTask[] = [];
+
+  aboutToAppear(): void {
+    this.cardTasks = parseTasks(this.tasksJson);
+  }
 
   private onTextColorChange(): void {
   }
@@ -63,6 +71,7 @@ struct WidgetCard {
   }
 
   private onTasksJsonChange(): void {
+    this.cardTasks = parseTasks(this.tasksJson);
     this.completingId = '';
   }
 
@@ -94,13 +103,9 @@ struct WidgetCard {
     });
   }
 
-  private tasks(): CardTask[] {
-    return parseTasks(this.tasksJson);
-  }
-
   build() {
     Column() {
-      if (this.tasks().length === 0) {
+      if (this.cardTasks.length === 0) {
         Column({ space: 5 }) {
           Text('今日清爽')
             .fontSize(15)
@@ -119,7 +124,7 @@ struct WidgetCard {
         .onClick(() => this.openApp())
       } else {
         List({ space: 2 }) {
-          ForEach(this.tasks(), (task: CardTask) => {
+          ForEach(this.cardTasks, (task: CardTask) => {
             ListItem() {
               Row({ space: 6 }) {
                 Stack() {

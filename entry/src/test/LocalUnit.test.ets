@@ -2,6 +2,7 @@ import { describe, it, expect } from '@ohos/hypium';
 import { VTodoCodec, unescapeText } from '../main/ets/caldav/VTodoCodec';
 import { CalendarObjectResponse, XmlHelpers } from '../main/ets/caldav/XmlHelpers';
 import { TodoTask } from '../main/ets/model/TaskModels';
+import { utf8Bytes, utf8String } from '../main/ets/utils/TextCodec';
 
 export default function localUnitTest() {
   describe('cavdalTaskCore', () => {
@@ -46,6 +47,23 @@ export default function localUnitTest() {
       expect(task.rawIcs.includes('TRIGGER:-P1D')).assertTrue();
     });
 
+    it('updateFieldsPreservesUnknownFieldsAndReplacesAlarm', 0, () => {
+      const ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VTODO\r\nUID:3\r\nSUMMARY:Old\r\nX-CUSTOM:keep-me\r\nDUE:20260617T043000Z\r\nRRULE:FREQ=DAILY\r\nBEGIN:VALARM\r\nTRIGGER:PT0S\r\nACTION:DISPLAY\r\nDESCRIPTION:Old\r\nEND:VALARM\r\nEND:VTODO\r\nEND:VCALENDAR\r\n';
+      const task: TodoTask | undefined = VTodoCodec.toTask(ics, '/tasks/3.ics', '/tasks/', '"3"');
+      if (task === undefined) {
+        expect(false).assertTrue();
+        return;
+      }
+      const updated = VTodoCodec.updateFields(task, 'New', '', '20260618T043000Z', '提前一天', '每周');
+      expect(updated.rawIcs.includes('X-CUSTOM:keep-me')).assertTrue();
+      expect(updated.rawIcs.includes('SUMMARY:New')).assertTrue();
+      expect(updated.rawIcs.includes('DESCRIPTION:Old')).assertFalse();
+      expect(updated.rawIcs.includes('DUE:20260618T043000Z')).assertTrue();
+      expect(updated.rawIcs.includes('RRULE:FREQ=WEEKLY')).assertTrue();
+      expect(updated.rawIcs.includes('TRIGGER:PT0S')).assertFalse();
+      expect(updated.rawIcs.includes('TRIGGER:-P1D')).assertTrue();
+    });
+
     it('parsesCalDavCalendarObjects', 0, () => {
       const xml = '<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">' +
         '<d:response><d:href>/cal/a.ics</d:href><d:propstat><d:prop><d:getetag>"a"</d:getetag>' +
@@ -60,6 +78,12 @@ export default function localUnitTest() {
 
     it('unescapesIcalendarText', 0, () => {
       expect(unescapeText('a\\;b\\,c\\nnext')).assertEqual('a;b,c\nnext');
+    });
+
+    it('roundTripsUtf8Text', 0, () => {
+      const value = '用户:密码🔐';
+      expect(utf8String(utf8Bytes(value))).assertEqual(value);
+      expect(utf8Bytes('用').length).assertEqual(3);
     });
   });
 }

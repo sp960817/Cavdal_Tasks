@@ -566,14 +566,18 @@ struct Index {
   private ActiveTaskRow(task: TodoTask) {
     Column({ space: 2 }) {
       Row({ space: 8 }) {
-        Toggle({ type: ToggleType.Checkbox, isOn: false })
-          .onChange((isOn: boolean) => {
-            if (isOn) {
-              this.toggleTask(task, true);
-            }
-          })
-          .width(22)
-          .height(22)
+        Stack({ alignContent: Alignment.Center }) {
+          Toggle({ type: ToggleType.Checkbox, isOn: false })
+            .onChange((isOn: boolean) => {
+              if (isOn) {
+                this.toggleTask(task, true);
+              }
+            })
+            .width(22)
+            .height(22)
+        }
+        .width(40)
+        .height(40)
 
         Text(task.title)
           .fontSize(16)
@@ -629,14 +633,18 @@ struct Index {
   @Builder
   private CompletedTaskRow(task: TodoTask) {
     Row({ space: 8 }) {
-      Toggle({ type: ToggleType.Checkbox, isOn: true })
-        .onChange((isOn: boolean) => {
-          if (!isOn) {
-            this.toggleTask(task, false);
-          }
-        })
-        .width(22)
-        .height(22)
+      Stack({ alignContent: Alignment.Center }) {
+        Toggle({ type: ToggleType.Checkbox, isOn: true })
+          .onChange((isOn: boolean) => {
+            if (!isOn) {
+              this.toggleTask(task, false);
+            }
+          })
+          .width(22)
+          .height(22)
+      }
+      .width(40)
+      .height(40)
 
       Text(task.title)
         .fontSize(16)
@@ -1351,10 +1359,11 @@ struct Index {
           .padding({ left: 22, right: 22, top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 4 })
 
           if (this.showSearch) {
-            TextInput({ placeholder: '搜索待办事项...', text: this.searchQuery })
+            Search({ value: this.searchQuery, placeholder: '搜索待办事项...' })
               .onChange((value: string) => this.searchQuery = value)
               .height(44)
-              .fontSize(16)
+              .textFont({ size: 16 })
+              .placeholderFont({ size: 16 })
               .backgroundColor($r('app.color.surface'))
               .borderRadius(18)
               .margin({ left: 22, right: 22, bottom: 4 })

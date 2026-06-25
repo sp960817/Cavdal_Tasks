@@ -4,6 +4,7 @@ import asset from '@ohos.security.asset';
 import { AccountSettings, CalendarSource, SyncOperation, TodoTask, WidgetBlurStyle, WidgetPayload, WidgetTask } from '../model/TaskModels';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
+import { utf8Bytes, utf8String } from '../utils/TextCodec';
 
 const DB_NAME = 'cavdal_tasks.db';
 const PREF_NAME = 'cavdal_settings';
@@ -51,22 +52,6 @@ function shouldShowInWidget(task: TodoTask, today: number): boolean {
   return delta >= -WIDGET_DAY_WINDOW && delta <= WIDGET_DAY_WINDOW;
 }
 
-function encode(value: string): Uint8Array {
-  const result = new Uint8Array(value.length);
-  for (let i = 0; i < value.length; i++) {
-    result[i] = value.charCodeAt(i) & 0xff;
-  }
-  return result;
-}
-
-function decode(bytes: Uint8Array): string {
-  let out = '';
-  for (let i = 0; i < bytes.length; i++) {
-    out += String.fromCharCode(bytes[i]);
-  }
-  return out;
-}
-
 function errorText(err: Object): string {
   try {
     return JSON.stringify(err);
@@ -78,7 +63,7 @@ function errorText(err: Object): string {
 export class CredentialStore {
   private static aliasQuery(): asset.AssetMap {
     const query = new Map<asset.Tag, asset.Value>();
-    query.set(asset.Tag.ALIAS, encode(PASSWORD_ALIAS));
+    query.set(asset.Tag.ALIAS, utf8Bytes(PASSWORD_ALIAS));
     return query;
   }
 
@@ -89,7 +74,7 @@ export class CredentialStore {
       } catch (_err) {
       }
       const data = CredentialStore.aliasQuery();
-      data.set(asset.Tag.SECRET, encode(password));
+      data.set(asset.Tag.SECRET, utf8Bytes(password));
       await asset.add(data);
     } catch (err) {
       console.error(`[CredentialStore] savePassword failed: ${errorText(err)}`);
@@ -106,7 +91,7 @@ export class CredentialStore {
         return '';
       }
       const secret = result[0].get(asset.Tag.SECRET) as Uint8Array;
-      return secret === undefined ? '' : decode(secret);
+      return secret === undefined ? '' : utf8String(secret);
     } catch (_err) {
       return '';
     }
@@ -258,6 +243,7 @@ export class TaskRepository {
         'id TEXT PRIMARY KEY, task_id TEXT, type TEXT, payload TEXT, created_at INTEGER, attempts INTEGER, last_error TEXT)');
       await store.executeSql('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');
       await store.executeSql('CREATE INDEX IF NOT EXISTS idx_tasks_sync_state ON tasks(sync_state)');
+      await store.executeSql('CREATE INDEX IF NOT EXISTS idx_tasks_calendar_href ON tasks(calendar_href)');
       await store.executeSql('CREATE INDEX IF NOT EXISTS idx_sync_queue_task_id ON sync_queue(task_id)');
     } catch (err) {
       this.fail<void>('migrate database', err);
@@ -290,6 +276,54 @@ export class TaskRepository {
       });
     } catch (err) {
       this.fail<void>('saveTasks', err);
+    }
+  }
+
+  async saveRemoteSnapshot(calendarHref: string, tasks: TodoTask[]): Promise<void> {
+    try {
+      await this.withTransaction<void>('saveRemoteSnapshot', async (store: relationalStore.RdbStore) => {
+        for (let i = 0; i < tasks.length; i++) {
+          const localState = await this.syncStateForTask(store, tasks[i].id);
+          if (localState.length === 0 || localState === 'synced') {
+            await this.saveTaskInternal(store, tasks[i]);
+          }
+        }
+        if (calendarHref.length === 0) {
+          return;
+        }
+        if (tasks.length === 0) {
+          await store.executeSql("DELETE FROM tasks WHERE calendar_href = ? AND sync_state = 'synced'", [calendarHref]);
+          return;
+        }
+        const placeholders: string[] = [];
+        const args: relationalStore.ValueType[] = [calendarHref];
+        for (let i = 0; i < tasks.length; i++) {
+          placeholders.push('?');
+          args.push(tasks[i].id);
+        }
+        await store.executeSql(
+          `DELETE FROM tasks WHERE calendar_href = ? AND sync_state = 'synced' AND id NOT IN (${placeholders.join(',')})`,
+          args
+        );
+      });
+    } catch (err) {
+      this.fail<void>('saveRemoteSnapshot', err);
+    }
+  }
+
+  private async syncStateForTask(store: relationalStore.RdbStore, taskId: string): Promise<string> {
+    let result: relationalStore.ResultSet | undefined = undefined;
+    try {
+      result = await store.querySql('SELECT sync_state FROM tasks WHERE id = ?', [taskId]);
+      if (result.goToFirstRow()) {
+        return result.getString(result.getColumnIndex('sync_state'));
+      }
+      return '';
+    } catch (err) {
+      this.fail<string>('syncStateForTask', err);
+      return '';
+    } finally {
+      this.closeResult(result);
     }
   }
 

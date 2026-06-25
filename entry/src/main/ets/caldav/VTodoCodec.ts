@@ -286,15 +286,88 @@ export class VTodoCodec {
     return '';
   }
 
+  private static alarmLines(title: string, due: string, reminder: string): string[] {
+    const alarmTrigger = VTodoCodec.reminderTrigger(reminder, due);
+    if (due.length === 0 || alarmTrigger.length === 0) {
+      return [];
+    }
+    return [
+      'BEGIN:VALARM',
+      `TRIGGER:${alarmTrigger}`,
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${escapeText(title)}`,
+      'END:VALARM'
+    ];
+  }
+
+  private static removeComponentLines(lines: string[], name: string): string[] {
+    const begin = `BEGIN:${name}`;
+    const end = `END:${name}`;
+    const out: string[] = [];
+    let skipping = false;
+    for (let i = 0; i < lines.length; i++) {
+      const upper = lines[i].toUpperCase();
+      if (upper === begin) {
+        skipping = true;
+        continue;
+      }
+      if (skipping) {
+        if (upper === end) {
+          skipping = false;
+        }
+        continue;
+      }
+      out.push(lines[i]);
+    }
+    return out;
+  }
+
+  private static mutateRawIcs(input: string, values: Map<string, string>, remove: string[] = [],
+    valarmLines: string[] = []): string {
+    const lines = VTodoCodec.removeComponentLines(unfold(input), 'VALARM');
+    const removeSet = new Set(remove.map((item: string) => item.toUpperCase()));
+    const seen = new Set<string>();
+    const nextLines: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const upper = lines[i].toUpperCase();
+      const prop = splitProperty(lines[i]);
+      if (prop !== undefined && (values.has(prop.name) || removeSet.has(prop.name))) {
+        if (values.has(prop.name)) {
+          nextLines.push(foldLine(`${prop.rawName}${prop.params}:${values.get(prop.name)}`));
+          seen.add(prop.name);
+        }
+      } else if (upper === 'END:VTODO') {
+        values.forEach((value: string, key: string) => {
+          if (!seen.has(key)) {
+            nextLines.push(foldLine(`${key}:${value}`));
+          }
+        });
+        for (let j = 0; j < valarmLines.length; j++) {
+          nextLines.push(foldLine(valarmLines[j]));
+        }
+        nextLines.push(lines[i]);
+      } else {
+        nextLines.push(lines[i]);
+      }
+    }
+    return nextLines.join('\r\n') + '\r\n';
+  }
+
   static setCompletion(task: TodoTask, done: boolean, date: Date = new Date()): TodoTask {
     const uid = extractUid(task.rawIcs);
     const status = done ? 'COMPLETED' : 'NEEDS-ACTION';
     const stamp = toUtcStamp(date);
     const completedAt = done ? stamp : '';
     const percent = done ? 100 : 0;
-    // Rebuild from scratch so VALARM etc are consistent
-    const raw = VTodoCodec.buildRawIcs(uid, task.title, task.description, task.due,
-      status, percent, completedAt, date, '', '');
+    const values = new Map<string, string>();
+    values.set('UID', uid);
+    values.set('LAST-MODIFIED', stamp);
+    values.set('STATUS', status);
+    values.set('PERCENT-COMPLETE', `${percent}`);
+    if (done) {
+      values.set('COMPLETED', completedAt);
+    }
+    const raw = VTodoCodec.mutateRawIcs(task.rawIcs, values, done ? ['RRULE'] : ['COMPLETED', 'RRULE']);
     return {
       id: uid,
       uid,
@@ -317,8 +390,29 @@ export class VTodoCodec {
   static updateFields(task: TodoTask, title: string, description: string, due: string, reminder: string, repeat: string): TodoTask {
     const uid = extractUid(task.rawIcs);
     const now = new Date();
-    const raw = VTodoCodec.buildRawIcs(uid, title, description, due,
-      task.status, task.percentComplete, task.completedAt, now, reminder, repeat);
+    const stamp = toUtcStamp(now);
+    const values = new Map<string, string>();
+    const remove: string[] = [];
+    values.set('UID', uid);
+    values.set('LAST-MODIFIED', stamp);
+    values.set('SUMMARY', escapeText(title));
+    if (description.length > 0) {
+      values.set('DESCRIPTION', escapeText(description));
+    } else {
+      remove.push('DESCRIPTION');
+    }
+    if (due.length > 0) {
+      values.set('DUE', due);
+    } else {
+      remove.push('DUE');
+    }
+    const repeatRule = VTodoCodec.repeatRule(repeat);
+    if (repeatRule.length > 0) {
+      values.set('RRULE', repeatRule);
+    } else {
+      remove.push('RRULE');
+    }
+    const raw = VTodoCodec.mutateRawIcs(task.rawIcs, values, remove, VTodoCodec.alarmLines(title, due, reminder));
     return {
       id: uid,
       uid,

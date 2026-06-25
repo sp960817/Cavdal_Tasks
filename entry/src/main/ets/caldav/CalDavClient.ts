@@ -4,6 +4,7 @@ import util from '@ohos.util';
 import { CalendarSource, TodoTask } from '../model/TaskModels';
 import { VTodoCodec } from './VTodoCodec';
 import { CalendarObjectResponse, XmlHelpers } from './XmlHelpers';
+import { utf8Bytes } from '../utils/TextCodec';
 
 const LOG_DOMAIN = 0x0000;
 const LOG_TAG = 'CavdalHTTP';
@@ -27,14 +28,6 @@ export interface PutResult {
   etag: string;
   status: number;
   message: string;
-}
-
-function bytes(value: string): Uint8Array {
-  const out = new Uint8Array(value.length);
-  for (let i = 0; i < value.length; i++) {
-    out[i] = value.charCodeAt(i) & 0xff;
-  }
-  return out;
 }
 
 function ensureSlash(url: string): string {
@@ -76,7 +69,7 @@ export class CalDavClient {
 
   constructor(private credentials: CalDavCredentials) {
     const helper = new util.Base64Helper();
-    this.authHeader = `Basic ${helper.encodeToStringSync(bytes(`${credentials.username}:${credentials.password}`))}`;
+    this.authHeader = `Basic ${helper.encodeToStringSync(utf8Bytes(`${credentials.username}:${credentials.password}`))}`;
   }
 
   private async request(url: string, method: string, body: string = '', extraHeaders: Record<string, string> = {}): Promise<http.HttpResponse> {

@@ -49,6 +49,8 @@ interface PreparedReminderRequest {
   skipReason?: string;
 }
 
+let reminderSyncInFlight: Promise<ReminderSyncSummary> | undefined = undefined;
+
 function errorText(err: Object): string {
   try {
     return JSON.stringify(err);
@@ -66,6 +68,18 @@ export class ReminderService {
   }
 
   async syncTasks(tasks: TodoTask[]): Promise<ReminderSyncSummary> {
+    if (reminderSyncInFlight !== undefined) {
+      return reminderSyncInFlight;
+    }
+    reminderSyncInFlight = this.doSyncTasks(tasks);
+    try {
+      return await reminderSyncInFlight;
+    } finally {
+      reminderSyncInFlight = undefined;
+    }
+  }
+
+  private async doSyncTasks(tasks: TodoTask[]): Promise<ReminderSyncSummary> {
     const summary: ReminderSyncSummary = {
       notificationsEnabled: false,
       activeTaskCount: tasks.length,
