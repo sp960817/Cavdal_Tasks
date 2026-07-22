@@ -40,6 +40,15 @@ function currentBeijingDayIndex(): number {
   return beijingDayIndex(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
 }
 
+function widgetSyncText(timestamp: number): string {
+  if (timestamp <= 0) {
+    return '尚未同步';
+  }
+  const date = new Date(timestamp);
+  const pad = (value: number): string => value < 10 ? `0${value}` : `${value}`;
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())} 同步`;
+}
+
 function shouldShowInWidget(task: TodoTask, today: number): boolean {
   if (task.due.trim().length === 0) {
     return true;
@@ -571,7 +580,7 @@ export class TaskRepository {
     return {
       tasks,
       pendingCount: pending,
-      lastSyncText: lastSyncAt > 0 ? new Date(lastSyncAt).toLocaleString() : '未同步'
+      lastSyncText: widgetSyncText(lastSyncAt)
     };
   }
 }

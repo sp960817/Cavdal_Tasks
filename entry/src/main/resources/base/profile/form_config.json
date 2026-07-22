@@ -2,7 +2,7 @@
   "forms": [
     {
       "name": "cavdal_tasks",
-      "displayName": "Cavdal 待办",
+      "displayName": "Caldav Tasks",
       "description": "CalDAV 待办事项",
       "src": "./ets/widget/WidgetCard.ets",
       "uiSyntax": "arkts",
@@ -14,11 +14,12 @@
       "isDefault": true,
       "isDynamic": true,
       "defaultDimension": "2*2",
-      "supportDimensions": ["1*2", "2*2", "2*4"],
+      "supportDimensions": ["1*2", "2*2", "2*4", "4*4"],
       "updateEnabled": true,
       "updateDuration": 1,
       "renderingMode": "fullColor",
       "transparencyEnabled": true,
+      "enableBlurBackground": true,
       "resizable": true,
       "groupId": "1"
     }

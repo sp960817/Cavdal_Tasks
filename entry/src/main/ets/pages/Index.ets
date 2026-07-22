@@ -3,11 +3,14 @@ import notificationManager from '@ohos.notificationManager';
 import { CalendarSource, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { TaskRepository } from '../data/TaskRepository';
 import { SyncService } from '../sync/SyncService';
-import { formatDueForDisplay, parseDueAsBeijing } from '../formatters/DueTimeFormatter';
+import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
 import { SymbolGlyphModifier, curves } from '@kit.ArkUI';
 import { motion } from '@kit.MultimodalAwarenessKit';
+import { TaskCards } from '../components/home/TaskCards';
+import { WidgetAppearanceCard, widgetBlurLabel } from '../components/settings/WidgetAppearanceCard';
+import { calculateHomeLayout, HomeLayoutMetrics } from '../utils/HomeLayout';
 
 @Entry
 @Component
@@ -96,8 +99,6 @@ struct Index {
     unselectedColor: $r('app.color.text_secondary'),
     selectedColor: $r('app.color.accent')
   });
-  private blurStyles: WidgetBlurStyle[] = ['none', 'thin', 'regular', 'thick'];
-
   private requireHostContext(): common.UIAbilityContext {
     const hostContext = this.uiContext.getHostContext();
     if (hostContext === undefined) {
@@ -408,6 +409,33 @@ struct Index {
     }
   }
 
+  private openEditTask(task: TodoTask): void {
+    this.editingTask = {
+      id: task.id,
+      uid: task.uid,
+      href: task.href,
+      calendarHref: task.calendarHref,
+      etag: task.etag,
+      title: task.title,
+      description: task.description,
+      due: task.due,
+      priority: task.priority,
+      status: task.status,
+      completedAt: task.completedAt,
+      percentComplete: task.percentComplete,
+      rawIcs: task.rawIcs,
+      syncState: task.syncState,
+      updatedAt: task.updatedAt
+    };
+    this.loadTaskState(task);
+    this.showEditSheet = true;
+  }
+
+  private setCompletedOpen(open: boolean): void {
+    this.showCompleted = open;
+    this.completedUserOverride = true;
+  }
+
   private async deleteTaskInList(task: TodoTask): Promise<void> {
     try {
       await this.syncService.deleteTask(task.id);
@@ -430,58 +458,17 @@ struct Index {
     }
   }
 
-  private widgetBlurLabel(style: WidgetBlurStyle): string {
-    if (style === 'none') return '通透';
-    if (style === 'thin') return '轻薄';
-    if (style === 'thick') return '厚重';
-    return '标准';
-  }
-
   private async updateWidgetBlurStyle(style: WidgetBlurStyle): Promise<void> {
     const previous = this.widgetBlurStyle;
     this.widgetBlurStyle = style;
     try {
       await this.syncService.saveWidgetBlurStyle(style);
-      this.statusText = `卡片背景已设为${this.widgetBlurLabel(style)}`;
+      this.statusText = `卡片背景已设为${widgetBlurLabel(style)}`;
     } catch (err) {
       this.widgetBlurStyle = previous;
       this.statusText = `卡片设置失败：${JSON.stringify(err)}`;
       this.safeShowToast('卡片设置失败');
     }
-  }
-
-  @Builder
-  private WidgetAppearanceSettings() {
-    Column({ space: 10 }) {
-      Text('桌面卡片背景')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-
-      Row({ space: 4 }) {
-        ForEach(this.blurStyles, (style: WidgetBlurStyle) => {
-          Button(this.widgetBlurLabel(style))
-            .type(ButtonType.Normal)
-            .fontSize(13)
-            .fontColor(this.widgetBlurStyle === style ?
-              $r('app.color.on_accent') : $r('app.color.text_secondary'))
-            .backgroundColor(this.widgetBlurStyle === style ?
-              $r('app.color.accent') : $r('app.color.surface_input'))
-            .borderRadius(8)
-            .height(36)
-            .layoutWeight(1)
-            .onClick(() => this.updateWidgetBlurStyle(style))
-        }, (style: WidgetBlurStyle) => style)
-      }
-      .width('100%')
-    }
-    .width('100%')
-    .padding(14)
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(14)
   }
 
   @Builder
@@ -566,243 +553,6 @@ struct Index {
     .width('100%')
   }
 
-  @Builder
-  private ActiveTaskRow(task: TodoTask) {
-    Column({ space: 2 }) {
-      Row({ space: 8 }) {
-        Stack({ alignContent: Alignment.Center }) {
-          Toggle({ type: ToggleType.Checkbox, isOn: false })
-            .onChange((isOn: boolean) => {
-              if (isOn) {
-                this.toggleTask(task, true);
-              }
-            })
-            .width(22)
-            .height(22)
-        }
-        .width(40)
-        .height(40)
-
-        Text(task.title)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .layoutWeight(1)
-
-        if (task.due.length > 0) {
-          Text(formatDueForDisplay(task.due))
-            .fontSize(14)
-            .fontColor($r('app.color.accent'))
-        }
-
-        if (VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无') {
-          SymbolGlyph($r('sys.symbol.bell'))
-            .fontSize(14)
-            .fontColor([$r('app.color.accent')])
-        }
-      }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.editingTask = {
-          id: task.id, uid: task.uid, href: task.href, calendarHref: task.calendarHref,
-          etag: task.etag, title: task.title, description: task.description, due: task.due,
-          priority: task.priority, status: task.status, completedAt: task.completedAt,
-          percentComplete: task.percentComplete, rawIcs: task.rawIcs,
-          syncState: task.syncState, updatedAt: task.updatedAt
-        };
-        this.loadTaskState(task);
-        this.showEditSheet = true;
-      })
-
-      if (task.syncState !== 'synced') {
-        Row() {
-          Blank()
-            .layoutWeight(1)
-          Text(task.syncState === 'pending' ? '待同步' : task.syncState)
-            .fontSize(12)
-            .fontColor(task.syncState === 'conflict' ? $r('app.color.danger_text') : $r('app.color.warning_text'))
-        }
-        .width('100%')
-      }
-    }
-    .width('100%')
-    .height(task.syncState !== 'synced' ? 58 : 44)
-    .padding({ left: 0, right: 12 })
-    .justifyContent(FlexAlign.Center)
-  }
-
-  @Builder
-  private CompletedTaskRow(task: TodoTask) {
-    Row({ space: 8 }) {
-      Stack({ alignContent: Alignment.Center }) {
-        Toggle({ type: ToggleType.Checkbox, isOn: true })
-          .onChange((isOn: boolean) => {
-            if (!isOn) {
-              this.toggleTask(task, false);
-            }
-          })
-          .width(22)
-          .height(22)
-      }
-      .width(40)
-      .height(40)
-
-      Text(task.title)
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_tertiary'))
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .layoutWeight(1)
-
-      if (task.due.length > 0) {
-        Text(formatDueForDisplay(task.due))
-          .fontSize(14)
-          .fontColor($r('app.color.text_disabled'))
-      }
-    }
-    .width('100%')
-    .height(40)
-    .padding({ left: 0, right: 12 })
-    .alignItems(VerticalAlign.Center)
-  }
-
-  @Builder
-  private ActiveTasksCard() {
-    Column() {
-      if (this.filteredActiveTasks().length === 0) {
-        Text('没有进行中的待办')
-          .fontSize(15)
-          .fontColor($r('app.color.text_tertiary'))
-          .width('100%')
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-      } else {
-        List({ space: 0 }) {
-          ForEach(this.filteredActiveTasks(), (task: TodoTask) => {
-            ListItem() {
-              this.ActiveTaskRow(task)
-            }
-            .swipeAction({
-              end: {
-                builder: () => {
-                  this.DeleteSwipeAction(task)
-                },
-                onAction: () => {
-                  this.deleteTaskInList(task);
-                }
-              }
-            })
-          }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollBar(BarState.Auto)
-        .edgeEffect(EdgeEffect.Spring)
-        .align(Alignment.TopStart)
-      }
-    }
-    .width('100%')
-    .height(this.computeActiveCardHeight())
-    .padding({ left: 16, right: 8, top: 10, bottom: 10 })
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(18)
-  }
-
-  @Builder
-  private DeleteSwipeAction(task: TodoTask) {
-    Row() {
-      Text('删除')
-        .fontSize(16)
-        .fontColor($r('app.color.on_accent'))
-        .fontWeight(FontWeight.Medium)
-    }
-    .width(72)
-    .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .backgroundColor($r('app.color.danger'))
-    .borderRadius({ topRight: 16, bottomRight: 16 })
-    .onClick(() => {
-      this.deleteTaskInList(task);
-    })
-  }
-
-  @Builder
-  private CompletedTasksCard() {
-    Column() {
-      Row({ space: 8 }) {
-        Text('已完成')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_tertiary'))
-        Text(`${this.completed.length}`)
-          .fontSize(15)
-          .fontColor($r('app.color.text_tertiary'))
-        SymbolGlyph(this.effectiveCompletedOpen() ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize(18)
-          .fontColor([$r('app.color.text_disabled')])
-      }
-      .width('100%')
-      .height(34)
-      .justifyContent(FlexAlign.Center)
-      .margin({ bottom: this.effectiveCompletedOpen() ? 8 : 0 })
-      .onClick(() => {
-        this.showCompleted = !this.effectiveCompletedOpen();
-        this.completedUserOverride = true;
-      })
-
-      if (this.effectiveCompletedOpen()) {
-        if (this.filteredCompletedTasks().length === 0) {
-          Text('暂无已完成事项')
-            .fontSize(15)
-            .fontColor($r('app.color.text_disabled'))
-            .width('100%')
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-        } else {
-          List({ space: 0 }) {
-            ForEach(this.filteredCompletedTasks(), (task: TodoTask) => {
-              ListItem() {
-                this.CompletedTaskRow(task)
-              }
-            .swipeAction({
-              end: {
-                builder: () => {
-                  this.DeleteSwipeAction(task)
-                },
-                onAction: () => {
-                  this.deleteTaskInList(task);
-                }
-              }
-            })
-            }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .scrollBar(BarState.Auto)
-          .edgeEffect(EdgeEffect.Spring)
-          .align(Alignment.TopStart)
-        }
-      }
-    }
-    .width('100%')
-    .height(this.computeCompletedCardHeight())
-    .padding({ left: 16, right: 8, top: 12, bottom: 12 })
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(18)
-  }
-
   private filteredActiveTasks(): TodoTask[] {
     if (this.searchQuery.length === 0) {
       return this.tasks;
@@ -823,58 +573,22 @@ struct Index {
     return this.filteredActiveTasks().filter((t: TodoTask) => t.syncState !== 'synced').length;
   }
 
-  private viewportHeight(): number {
-    return this.homeViewportHeight > 0 ? this.homeViewportHeight : 700;
-  }
-
-  private homeUsableHeight(): number {
-    return Math.max(this.viewportHeight() - 124, 200);
-  }
-
-  private activeNaturalHeight(): number {
-    const count = this.filteredActiveTasks().length;
-    if (count === 0) {
-      return 72;
-    }
-    return count * 44 + this.pendingTaskCount() * 18 + 20;
-  }
-
-  private autoFoldCompleted(): boolean {
-    const remainingIfExpanded = this.homeUsableHeight() - this.activeNaturalHeight();
-    return remainingIfExpanded < this.viewportHeight() * 0.5;
-  }
-
-  private effectiveCompletedOpen(): boolean {
-    if (!this.completedUserOverride) {
-      return !this.autoFoldCompleted();
-    }
-    return this.showCompleted;
-  }
-
-  private computeActiveCardHeight(): number {
-    const usable = this.homeUsableHeight();
-    if (this.effectiveCompletedOpen()) {
-      const completedMin = 190;
-      const completedH = Math.max(usable - this.activeNaturalHeight(), completedMin);
-      return Math.min(this.activeNaturalHeight(), usable - completedH);
-    }
-    const foldedCompletedH = 58;
-    return Math.max(usable - foldedCompletedH, 72);
-  }
-
-  private computeCompletedCardHeight(): number {
-    if (!this.effectiveCompletedOpen()) {
-      return 58;
-    }
-    const usable = this.homeUsableHeight();
-    return Math.max(usable - this.activeNaturalHeight(), 190);
+  private homeLayout(): HomeLayoutMetrics {
+    return calculateHomeLayout(this.homeViewportHeight, this.filteredActiveTasks().length,
+      this.pendingTaskCount(), this.filteredCompletedTasks().length,
+      this.completedUserOverride, this.showCompleted);
   }
 
   @Builder
   private SettingsView() {
     Column({ space: 14 }) {
       this.ServerSettingsMenu()
-      this.WidgetAppearanceSettings()
+      WidgetAppearanceCard({
+        selectedStyle: this.widgetBlurStyle,
+        onStyleChange: (style: WidgetBlurStyle): void => {
+          this.updateWidgetBlurStyle(style);
+        }
+      })
 
       Row() {
         Column({ space: 2 }) {
@@ -926,16 +640,39 @@ struct Index {
   @Builder
   private HomeView() {
     Column({ space: 14 }) {
-      this.ActiveTasksCard()
-      this.CompletedTasksCard()
+      TaskCards({
+        activeTasks: this.filteredActiveTasks(),
+        completedTasks: this.filteredCompletedTasks(),
+        completedTotalCount: this.completed.length,
+        activeHeight: this.homeLayout().activeHeight,
+        completedHeight: this.homeLayout().completedHeight,
+        completedOpen: this.homeLayout().completedOpen,
+        onToggleTask: (task: TodoTask, done: boolean): void => {
+          this.toggleTask(task, done);
+        },
+        onEditTask: (task: TodoTask): void => {
+          this.openEditTask(task);
+        },
+        onDeleteTask: (task: TodoTask): void => {
+          this.deleteTaskInList(task);
+        },
+        onCompletedOpenChange: (open: boolean): void => {
+          this.setCompletedOpen(open);
+        }
+      })
 
       Text(this.statusText)
         .fontSize(11)
         .fontColor($r('app.color.text_tertiary'))
         .width('100%')
         .textAlign(TextAlign.Center)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+        .backgroundColor($r('app.color.surface_translucent'))
+        .borderRadius(12)
     }
-    .padding({ left: 16, right: 16, top: 4, bottom: 76 })
+    .padding({ left: 16, right: 16, top: 4, bottom: 132 })
     .width('100%')
     .height('100%')
   }
@@ -1376,7 +1113,7 @@ struct Index {
       Column() {
         if (this.configured) {
           Row() {
-            Text(this.selectedTabIndex === 1 ? 'Cavdal Tasks' : '待办事项')
+            Text(this.selectedTabIndex === 1 ? 'Caldav Tasks' : '待办事项')
               .fontSize(30)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))

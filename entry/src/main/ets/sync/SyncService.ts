@@ -56,7 +56,8 @@ export class SyncService {
       settings = await this.settings.load();
     } catch (err) {
       return { client: undefined as unknown as CalDavClient, settings: {
-        serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin'
+        serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin',
+        handednessEnabled: false
       } as AccountSettings, ok: false };
     }
     let password = '';
@@ -137,7 +138,8 @@ export class SyncService {
     try {
       const loaded = await this.getClient();
       if (!loaded.ok) {
-        return { ok: false, message: '请先配置 CalDAV 账号', imported: 0 };
+        await this.refreshWidgets();
+        return { ok: false, message: 'CalDAV 未连接，待办将暂存本地', imported: 0 };
       }
       client = loaded.client;
       settings = loaded.settings;
@@ -206,6 +208,7 @@ export class SyncService {
       await this.repository.enqueue(this.operationFor(task));
     }
     await this.refreshReminders();
+    await this.refreshWidgets();
   }
 
   async setTaskCompleted(taskId: string, done: boolean): Promise<void> {
@@ -261,6 +264,7 @@ export class SyncService {
   async clearLocal(): Promise<void> {
     await this.repository.clearTasks();
     await this.refreshReminders();
+    await this.refreshWidgets();
   }
 
   private operationFor(task: TodoTask): SyncOperation {
@@ -307,6 +311,7 @@ export class SyncService {
       }
     }
     await this.refreshReminders();
+    await this.refreshWidgets();
   }
 
   private makeDeleteOp(taskId: string, href: string, etag: string): SyncOperation {
