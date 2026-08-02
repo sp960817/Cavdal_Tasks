@@ -1,4 +1,5 @@
 import { common } from '@kit.AbilityKit';
+import { deviceInfo } from '@kit.BasicServicesKit';
 import notificationManager from '@ohos.notificationManager';
 import { CalendarSource, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { TaskRepository } from '../data/TaskRepository';
@@ -6,7 +7,7 @@ import { SyncService } from '../sync/SyncService';
 import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
-import { SymbolGlyphModifier, curves } from '@kit.ArkUI';
+import { SymbolGlyphModifier, curves, uiMaterial } from '@kit.ArkUI';
 import { motion } from '@kit.MultimodalAwarenessKit';
 import { TaskCards } from '../components/home/TaskCards';
 import { WidgetAppearanceCard, widgetBlurLabel } from '../components/settings/WidgetAppearanceCard';
@@ -38,6 +39,9 @@ struct Index {
   @State settingPanel: string = '';
   @State showAddSheet: boolean = false;
   @State selectedTabIndex: number = 0;
+  // API 26 Beta2 首次布局时会先按默认栏高测量一次；首屏完成后递增该值，
+  // 让原生 Tabs 在用户交互前重新测量自动栏高。
+  @State tabBarLayoutPass: number = 0;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
   @State showCompleted: boolean = false;
@@ -60,6 +64,7 @@ struct Index {
   private firstPageShow: boolean = true;
   private reminderNotificationPrompted: boolean = false;
   private hdsController: HdsTabsController = new HdsTabsController();
+  private tabsController: TabsController = new TabsController();
   private handleHoldingHandChange: Callback<motion.HoldingHandStatus> = (status: motion.HoldingHandStatus) => {
     this.getUIContext().animateTo({ curve: curves.interpolatingSpring(0, 1, 288, 30) }, () => {
       if (canIUse('SystemCapability.MultimodalAwareness.Motion')) {
@@ -222,8 +227,20 @@ struct Index {
     }
     this.loading = false;
     if (this.configured) {
+      this.scheduleTabBarLayoutPass();
       await this.syncNow();
     }
+  }
+
+  private scheduleTabBarLayoutPass(): void {
+    if (!deviceInfo.apiAvailable('26.0.0') || !this.configured) {
+      return;
+    }
+    setTimeout(() => {
+      if (this.configured) {
+        this.tabBarLayoutPass += 1;
+      }
+    }, 160);
   }
 
   private async refreshLists(): Promise<void> {
@@ -261,6 +278,7 @@ struct Index {
       await this.syncService.saveAccount(this.serverUrl, this.username, this.password, this.calendars[this.selectedCalendarIndex]);
       this.configured = true;
       this.selectedTabIndex = 0;
+      this.scheduleTabBarLayoutPass();
       this.statusText = '账号已保存';
       await this.syncNow();
     } catch (err) {
@@ -1098,6 +1116,49 @@ struct Index {
     .edgeEffect(EdgeEffect.Spring)
   }
 
+  @Builder
+  private MainTabContents() {
+    TabContent() {
+      Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
+        Column() {
+          this.HomeView()
+        }
+        .width('100%')
+        .height('100%')
+        .backgroundColor($r('app.color.page_background'))
+        .onAreaChange((_oldValue: Area, newValue: Area) => {
+          const h = newValue.height;
+          if (typeof h === 'number') {
+            this.homeViewportHeight = h;
+          }
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .pullToRefresh(this.configured)
+      .refreshOffset(64)
+      .onRefreshing(() => {
+        this.refreshFromPull();
+      })
+    }
+    .tabBar(this.homeTabBar)
+
+    TabContent() {
+      Scroll() {
+        Column() {
+          this.SettingsView()
+        }
+        .width('100%')
+        .backgroundColor($r('app.color.page_background'))
+      }
+      .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Auto)
+      .align(Alignment.TopStart)
+    }
+    .tabBar(this.settingsTabBar)
+  }
+
   build() {
     RelativeContainer() {
       Column()
@@ -1155,63 +1216,56 @@ struct Index {
               .margin({ left: 22, right: 22, bottom: 4 })
           }
 
-          HdsTabs({ controller: this.hdsController }) {
-            TabContent() {
-              Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
-                Column() {
-                  this.HomeView()
-                }
-                .width('100%')
-                .height('100%')
-                .backgroundColor($r('app.color.page_background'))
-                .onAreaChange((_oldValue: Area, newValue: Area) => {
-                  const h = newValue.height;
-                  if (typeof h === 'number') {
-                    this.homeViewportHeight = h;
-                  }
-                })
-              }
-              .width('100%')
-              .height('100%')
-              .pullToRefresh(this.configured)
-              .refreshOffset(64)
-              .onRefreshing(() => {
-                this.refreshFromPull();
+          if (deviceInfo.apiAvailable('26.0.0')) {
+            // API 26 起使用 ArkUI 原生悬浮 Tabs，避开旧目标版本 HdsTabs 在 Beta2 上不渲染的问题。
+            Tabs({ barPosition: BarPosition.End, controller: this.tabsController }) {
+              this.MainTabContents()
+            }
+            .vertical(false)
+            .scrollable(true)
+            .barOverlap(true)
+            // Beta2 的 auto 在 TabContent 更新时会恢复默认高度；48vp 对应自动测量后的目标高度。
+            .barHeight(48)
+            .barFloatingStyle({
+              barBottomMargin: 24,
+              adaptToHandedness: true,
+              systemMaterial: new uiMaterial.ImmersiveMaterial({
+                colorInvert: true,
+                interactive: true,
+                lightEffect: { color: $r('app.color.accent') }
               })
+            })
+            .onChange((index: number) => {
+              this.selectedTabIndex = index;
+            })
+            .layoutWeight(1)
+            .width('100%')
+            .id(`main-tabs-${this.tabBarLayoutPass}`)
+          } else {
+            // API 24-25 保留 HDS 实现，维持旧系统的沉浸光感和握姿适配。
+            HdsTabs({ controller: this.hdsController }) {
+              this.MainTabContents()
             }
-            .tabBar(this.homeTabBar)
-
-            TabContent() {
-              Scroll() {
-                Column() {
-                  this.SettingsView()
-                }
-                .width('100%')
-                .backgroundColor($r('app.color.page_background'))
+            .barPosition(BarPosition.End)
+            .vertical(false)
+            .scrollable(true)
+            .barOverlap(true)
+            .barHeight(60)
+            .barFloatingStyle({
+              barBottomMargin: 24,
+              adaptToHandedness: true,
+              lightColor: $r('app.color.accent'),
+              systemMaterialEffect: {
+                materialType: hdsMaterial.MaterialType.IMMERSIVE,
+                materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
               }
-              .width('100%')
-              .height('100%')
-              .scrollBar(BarState.Auto)
-              .align(Alignment.TopStart)
-            }
-            .tabBar(this.settingsTabBar)
+            })
+            .onChange((index: number) => {
+              this.selectedTabIndex = index;
+            })
+            .layoutWeight(1)
+            .width('100%')
           }
-          .barPosition(BarPosition.End)
-          .barOverlap(true)
-          .barFloatingStyle({
-            barBottomMargin: 24,
-            adaptToHandedness: true,
-            lightColor: $r('app.color.accent'),
-            systemMaterialEffect: {
-              materialType: hdsMaterial.MaterialType.IMMERSIVE,
-              materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
-            }
-          })
-          .onChange((index: number) => {
-            this.selectedTabIndex = index;
-          })
-          .layoutWeight(1)
-          .width('100%')
         } else {
           Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
             Scroll() {
