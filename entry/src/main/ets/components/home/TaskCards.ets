@@ -10,12 +10,55 @@ export struct TaskCards {
   @Prop activeHeight: number = 108;
   @Prop completedHeight: number = 58;
   @Prop completedOpen: boolean = false;
+  // 正在播放"完成"动画的任务 id 集合，驱动删除线/淡出过渡
+  @State completingIds: string[] = [];
+  // 动画已结束、已从视觉列表移除（不等网络刷新）的任务 id 集合
+  @State removedIds: string[] = [];
   onToggleTask: (task: TodoTask, done: boolean) => void =
     (_task: TodoTask, _done: boolean): void => {};
   onEditTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
   onDeleteTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
   onAddTask: () => void = (): void => {};
   onCompletedOpenChange: (open: boolean) => void = (_open: boolean): void => {};
+
+  private isCompleting(taskId: string): boolean {
+    return this.completingIds.indexOf(taskId) >= 0;
+  }
+
+  private isRemoved(taskId: string): boolean {
+    return this.removedIds.indexOf(taskId) >= 0;
+  }
+
+  // 渲染用列表：过滤掉已完成动画、等待数据层确认的任务
+  private visibleActiveTasks(): TodoTask[] {
+    return this.activeTasks.filter((t: TodoTask) => !this.isRemoved(t.id));
+  }
+
+  // 官方推荐：显式动画 animateTo 驱动状态变化（List 增删不自带动画）
+  private animateComplete(task: TodoTask): void {
+    if (this.isCompleting(task.id) || this.isRemoved(task.id)) {
+      return;
+    }
+    this.getUIContext().animateTo({
+      duration: 260,
+      curve: Curve.EaseInOut,
+      onFinish: () => {
+        // 动画结束立即从视觉列表移除该行（不等网络刷新），消除悬停等待；
+        // 数据层 setTaskCompleted 在后台继续完成，refreshLists 后任务进已完成。
+        this.removedIds = this.removedIds.concat(task.id);
+        this.completingIds = this.completingIds.filter((id: string) => id !== task.id);
+        this.onToggleTask(task, true);
+        // 兜底：若同步失败任务仍在列表，2s 后恢复显示供用户重试
+        setTimeout(() => {
+          this.removedIds = this.removedIds.filter((id: string) => id !== task.id);
+        }, 2000);
+      }
+    }, () => {
+      // 关键：状态变更必须在 animateTo 闭包内执行，
+      // ArkUI 才能捕捉"可见→透明"的差异并生成过渡动画。
+      this.completingIds = this.completingIds.concat(task.id);
+    });
+  }
 
   @Builder
   private ActiveTaskRow(task: TodoTask) {
@@ -25,7 +68,7 @@ export struct TaskCards {
           Toggle({ type: ToggleType.Checkbox, isOn: false })
             .onChange((isOn: boolean) => {
               if (isOn) {
-                this.onToggleTask(task, true);
+                this.animateComplete(task);
               }
             })
             .width(22)
@@ -37,7 +80,12 @@ export struct TaskCards {
         Text(task.title)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
+          .fontColor(this.isCompleting(task.id) ?
+            $r('app.color.text_tertiary') : $r('app.color.text_primary'))
+          .decoration(this.isCompleting(task.id) ? {
+            type: TextDecorationType.LineThrough,
+            color: $r('app.color.text_tertiary')
+          } : { type: TextDecorationType.None })
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -45,13 +93,15 @@ export struct TaskCards {
         if (task.due.length > 0) {
           Text(formatDueForDisplay(task.due))
             .fontSize(14)
-            .fontColor($r('app.color.accent'))
+            .fontColor(this.isCompleting(task.id) ?
+              $r('app.color.text_disabled') : $r('app.color.accent'))
         }
 
         if (VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无') {
           SymbolGlyph($r('sys.symbol.bell'))
             .fontSize(14)
-            .fontColor([$r('app.color.accent')])
+            .fontColor([this.isCompleting(task.id) ?
+              $r('app.color.text_disabled') : $r('app.color.accent')])
         }
       }
       .width('100%')
@@ -83,6 +133,8 @@ export struct TaskCards {
     .borderRadius(10)
     .backgroundColor(task.syncState === 'conflict' ?
       $r('app.color.danger_soft') : Color.Transparent)
+    .opacity(this.isCompleting(task.id) ? 0 : 1)
+    .translate({ x: 0, y: this.isCompleting(task.id) ? 6 : 0 })
   }
 
   @Builder
@@ -149,7 +201,7 @@ export struct TaskCards {
           .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_secondary'))
-        Text(`${this.activeTasks.length}`)
+        Text(`${this.visibleActiveTasks().length}`)
           .fontSize(13)
           .fontColor($r('app.color.text_tertiary'))
         Blank()
@@ -158,7 +210,7 @@ export struct TaskCards {
       .height(30)
       .padding({ left: 4, right: 8 })
 
-      if (this.activeTasks.length === 0) {
+      if (this.visibleActiveTasks().length === 0) {
         Column({ space: 10 }) {
           SymbolGlyph($r('sys.symbol.checkmark_circle'))
             .fontSize(44)
@@ -199,7 +251,7 @@ export struct TaskCards {
         .alignItems(HorizontalAlign.Center)
       } else {
         List({ space: 0 }) {
-          ForEach(this.activeTasks, (task: TodoTask) => {
+          ForEach(this.visibleActiveTasks(), (task: TodoTask) => {
             ListItem() {
               this.ActiveTaskRow(task)
             }
