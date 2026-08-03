@@ -39,9 +39,11 @@ struct Index {
   @State settingPanel: string = '';
   @State showAddSheet: boolean = false;
   @State selectedTabIndex: number = 0;
-  // API 26 Beta2 首次布局时会先按默认栏高测量一次；首屏完成后递增该值，
-  // 让原生 Tabs 在用户交互前重新测量自动栏高。
-  @State tabBarLayoutPass: number = 0;
+  // API 26 Beta2 首次布局时会先按默认栏高测量一次；首屏完成后置 48，
+  // 通过 barHeight 状态变化触发 bar 区域重排（而非重建整棵 Tabs），
+  // 让原生 Tabs 在用户交互前按目标栏高重新测量。
+  @State tabBarHeight: number = 47;
+  private tabBarLayoutPassTriggered: boolean = false;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
   @State showCompleted: boolean = false;
@@ -227,18 +229,22 @@ struct Index {
     }
     this.loading = false;
     if (this.configured) {
-      this.scheduleTabBarLayoutPass();
       await this.syncNow();
     }
   }
 
   private scheduleTabBarLayoutPass(): void {
-    if (!deviceInfo.apiAvailable('26.0.0') || !this.configured) {
+    if (!deviceInfo.apiAvailable('26.0.0') || !this.configured || this.tabBarLayoutPassTriggered) {
       return;
     }
+    this.tabBarLayoutPassTriggered = true;
+    // Beta2 首帧会忽略 barHeight 按默认栏高渲染（所以首帧"高一点"）。
+    // 在 Tabs 挂载且首帧布局完成后（onAreaChange 回调）置目标栏高 48，
+    // 让 bar 重排在首帧布局内完成，跳变不可感知。setTimeout 仅作兜底。
+    this.tabBarHeight = 48;
     setTimeout(() => {
       if (this.configured) {
-        this.tabBarLayoutPass += 1;
+        this.tabBarHeight = 48;
       }
     }, 160);
   }
@@ -278,7 +284,6 @@ struct Index {
       await this.syncService.saveAccount(this.serverUrl, this.username, this.password, this.calendars[this.selectedCalendarIndex]);
       this.configured = true;
       this.selectedTabIndex = 0;
-      this.scheduleTabBarLayoutPass();
       this.statusText = '账号已保存';
       await this.syncNow();
     } catch (err) {
@@ -1131,6 +1136,8 @@ struct Index {
           if (typeof h === 'number') {
             this.homeViewportHeight = h;
           }
+          // Tabs 首帧布局完成即触发 bar 重排，让 47→48 的跳变发生在首帧内
+          this.scheduleTabBarLayoutPass();
         })
       }
       .width('100%')
@@ -1224,8 +1231,9 @@ struct Index {
             .vertical(false)
             .scrollable(true)
             .barOverlap(true)
-            // Beta2 的 auto 在 TabContent 更新时会恢复默认高度；48vp 对应自动测量后的目标高度。
-            .barHeight(48)
+            // 状态驱动栏高：47 → 48 只触发 bar 区域重排，避免 .id() 重建整棵 Tabs。
+            // 47vp 为过渡值，首帧视觉偏差 1vp 不可感知。
+            .barHeight(this.tabBarHeight)
             .barFloatingStyle({
               barBottomMargin: 24,
               adaptToHandedness: true,
@@ -1240,7 +1248,6 @@ struct Index {
             })
             .layoutWeight(1)
             .width('100%')
-            .id(`main-tabs-${this.tabBarLayoutPass}`)
           } else {
             // API 24-25 保留 HDS 实现，维持旧系统的沉浸光感和握姿适配。
             HdsTabs({ controller: this.hdsController }) {

@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.cer",
+          "certpath": "C:\\Users\\Administrator\\Downloads\\auto_debug_30086000733997810.cer.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B5D3859B42E8582731640855C931F36D328DD4252D88B48FD1554752DD5C000F48CFBBD76D5E95D",
-          "profile": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.p7b",
+          "keyPassword": "00000019312D12B5A6EE9BEE051B10BCFEBE694076F9132F5C27C5CE4D7807B3BF8CDEBC89F88174AF",
+          "profile": "C:\\Users\\Administrator\\Downloads\\开发Debug.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/siiloo/.ohos/config/default_Cavdal_Tasks_vMm56yFTR0lDzdggJ1fN5vCfYdUzbv3ROy4g5i8pBp0=.p12",
-          "storePassword": "0000001B18932E203E4EB8EA8A59F61C65610F397EAC3C8499D555FEB45C98B6D75AF88E0EF4095DE787E4"
+          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_Cavdal_Tasks_VyZtbBbllfFlOv7EEP-yS1xSG7xdQ2rBE5C9YDqERXw=.p12",
+          "storePassword": "000000190BE69B7450FA92FE73029A738BE40D913605556D5D53212E0C6C850D73F9FBCE43EC2E7893"
         }
       }
     ],
