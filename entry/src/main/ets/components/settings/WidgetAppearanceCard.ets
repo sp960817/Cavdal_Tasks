@@ -43,6 +43,6 @@ export struct WidgetAppearanceCard {
     .backgroundColor($r('app.color.surface_translucent'))
     .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
     .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(14)
+    .borderRadius(16)
   }
 }

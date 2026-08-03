@@ -14,6 +14,7 @@ export struct TaskCards {
     (_task: TodoTask, _done: boolean): void => {};
   onEditTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
   onDeleteTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
+  onAddTask: () => void = (): void => {};
   onCompletedOpenChange: (open: boolean) => void = (_open: boolean): void => {};
 
   @Builder
@@ -58,21 +59,30 @@ export struct TaskCards {
       .onClick(() => this.onEditTask(task))
 
       if (task.syncState !== 'synced') {
-        Row() {
-          Blank()
-            .layoutWeight(1)
-          Text(task.syncState === 'pending' ? '待同步' : task.syncState)
+        Row({ space: 5 }) {
+          Circle({ width: 6, height: 6 })
+            .fill(task.syncState === 'conflict' ?
+              $r('app.color.danger') : $r('app.color.warning_text'))
+          Text(task.syncState === 'pending' ? '待同步' :
+            task.syncState === 'conflict' ? '同步冲突' : task.syncState)
             .fontSize(12)
+            .fontWeight(task.syncState === 'conflict' ? FontWeight.Medium : FontWeight.Normal)
             .fontColor(task.syncState === 'conflict' ?
               $r('app.color.danger_text') : $r('app.color.warning_text'))
         }
+        .padding({ left: 8, right: 8, top: 2, bottom: 2 })
+        .backgroundColor(task.syncState === 'conflict' ?
+          $r('app.color.danger_soft') : Color.Transparent)
+        .borderRadius(8)
         .width('100%')
       }
     }
     .width('100%')
-    .height(task.syncState !== 'synced' ? 58 : 44)
-    .padding({ left: 0, right: 12 })
-    .justifyContent(FlexAlign.Center)
+    .height(task.syncState !== 'synced' ? 60 : 44)
+    .padding({ left: task.syncState === 'conflict' ? 10 : 0, right: 12 })
+    .borderRadius(10)
+    .backgroundColor(task.syncState === 'conflict' ?
+      $r('app.color.danger_soft') : Color.Transparent)
   }
 
   @Builder
@@ -95,6 +105,10 @@ export struct TaskCards {
         .fontSize(16)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_tertiary'))
+        .decoration({
+          type: TextDecorationType.LineThrough,
+          color: $r('app.color.text_tertiary')
+        })
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
@@ -132,7 +146,7 @@ export struct TaskCards {
     Column() {
       Row({ space: 6 }) {
         Text('未完成')
-          .fontSize(15)
+          .fontSize(16)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_secondary'))
         Text(`${this.activeTasks.length}`)
@@ -145,14 +159,44 @@ export struct TaskCards {
       .padding({ left: 4, right: 8 })
 
       if (this.activeTasks.length === 0) {
-        Text('没有进行中的待办')
-          .fontSize(15)
-          .fontColor($r('app.color.text_tertiary'))
-          .width('100%')
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Column({ space: 10 }) {
+          SymbolGlyph($r('sys.symbol.checkmark_circle'))
+            .fontSize(44)
+            .fontColor([$r('app.color.text_disabled')])
+            .opacity(0.6)
+          Text('没有进行中的待办')
+            .fontSize(16)
+            .fontColor($r('app.color.text_secondary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('点击下方按钮，添加第一个待办事项')
+            .fontSize(13)
+            .fontColor($r('app.color.text_tertiary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Button() {
+            Row({ space: 6 }) {
+              SymbolGlyph($r('sys.symbol.plus'))
+                .fontSize(14)
+                .fontColor([$r('app.color.on_accent')])
+              Text('添加待办')
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('app.color.on_accent'))
+            }
+          }
+          .type(ButtonType.Normal)
+          .height(38)
+          .padding({ left: 20, right: 20 })
+          .backgroundColor($r('app.color.accent'))
+          .borderRadius(19)
+          .margin({ top: 2 })
+          .onClick(() => this.onAddTask())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
       } else {
         List({ space: 0 }) {
           ForEach(this.activeTasks, (task: TodoTask) => {
@@ -190,7 +234,7 @@ export struct TaskCards {
     Column() {
       Row({ space: 8 }) {
         Text('已完成')
-          .fontSize(20)
+          .fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_tertiary'))
         Text(`${this.completedTotalCount}`)
@@ -208,14 +252,21 @@ export struct TaskCards {
 
       if (this.completedOpen) {
         if (this.completedTasks.length === 0) {
-          Text('暂无已完成事项')
-            .fontSize(15)
-            .fontColor($r('app.color.text_disabled'))
-            .width('100%')
-            .layoutWeight(1)
-            .textAlign(TextAlign.Center)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Column({ space: 6 }) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(30)
+              .fontColor([$r('app.color.text_disabled')])
+              .opacity(0.5)
+            Text('暂无已完成事项')
+              .fontSize(15)
+              .fontColor($r('app.color.text_disabled'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
         } else {
           List({ space: 0 }) {
             ForEach(this.completedTasks, (task: TodoTask) => {

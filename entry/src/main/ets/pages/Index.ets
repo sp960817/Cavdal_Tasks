@@ -85,10 +85,10 @@ struct Index {
     });
   };
   private homeTabBar: BottomTabBarStyle = new BottomTabBarStyle({
-    normal: new SymbolGlyphModifier($r('sys.symbol.list_bullet'))
+    normal: new SymbolGlyphModifier($r('sys.symbol.checkmark_square'))
       .renderingStrategy(SymbolRenderingStrategy.SINGLE)
       .fontColor([$r('app.color.text_secondary')]),
-    selected: new SymbolGlyphModifier($r('sys.symbol.list_bullet'))
+    selected: new SymbolGlyphModifier($r('sys.symbol.checkmark_square'))
       .renderingStrategy(SymbolRenderingStrategy.SINGLE)
       .fontColor([$r('app.color.accent')])
   }, '首页').labelStyle({
@@ -507,7 +507,7 @@ struct Index {
     .backgroundColor($r('app.color.surface_translucent'))
     .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
     .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(14)
+    .borderRadius(18)
   }
 
   @Builder
@@ -634,7 +634,7 @@ struct Index {
       .backgroundColor($r('app.color.surface_translucent'))
       .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
       .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-      .borderRadius(14)
+      .borderRadius(18)
 
       Button('立即同步')
         .height(44)
@@ -679,6 +679,9 @@ struct Index {
         onDeleteTask: (task: TodoTask): void => {
           this.deleteTaskInList(task);
         },
+        onAddTask: (): void => {
+          this.openAddSheet();
+        },
         onCompletedOpenChange: (open: boolean): void => {
           this.setCompletedOpen(open);
         }
@@ -695,7 +698,7 @@ struct Index {
         .backgroundColor($r('app.color.surface_translucent'))
         .borderRadius(12)
     }
-    .padding({ left: 16, right: 16, top: 4, bottom: 132 })
+    .padding({ left: 22, right: 22, top: 4, bottom: 132 })
     .width('100%')
     .height('100%')
   }
@@ -753,11 +756,11 @@ struct Index {
               .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
           }
           .type(ButtonType.Normal)
-          .width(42)
-          .height(42)
+          .width(44)
+          .height(44)
           .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
           .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(21)
+          .borderRadius(22)
           .onClick(() => this.showDatePicker())
 
           if (this.hasDue) {
@@ -768,11 +771,11 @@ struct Index {
                 .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .type(ButtonType.Normal)
-            .width(42)
-            .height(42)
+            .width(44)
+            .height(44)
             .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
             .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(21)
+            .borderRadius(22)
             .onClick(() => this.showTimePicker())
           }
 
@@ -783,11 +786,11 @@ struct Index {
               .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
           }
           .type(ButtonType.Normal)
-          .width(42)
-          .height(42)
+          .width(44)
+          .height(44)
           .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
           .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(21)
+          .borderRadius(22)
           .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
 
           Button() {
@@ -797,11 +800,11 @@ struct Index {
               .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
           }
           .type(ButtonType.Normal)
-          .width(42)
-          .height(42)
+          .width(44)
+          .height(44)
           .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
           .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(21)
+          .borderRadius(22)
           .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
         }
 
@@ -809,7 +812,7 @@ struct Index {
           .layoutWeight(1)
 
         Button('取消')
-          .height(42)
+          .height(44)
           .fontSize(16)
           .fontWeight(FontWeight.Medium)
           .padding({ left: 18, right: 18 })
@@ -817,7 +820,7 @@ struct Index {
           .backgroundColor($r('app.color.surface_translucent'))
           .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
           .border({ width: 1, color: $r('app.color.bar_glass_edge') })
-          .borderRadius(21)
+          .borderRadius(22)
           .onClick(() => {
             this.showAddSheet = false;
           })
@@ -887,11 +890,11 @@ struct Index {
                 .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .type(ButtonType.Normal)
-            .width(42)
-            .height(42)
+            .width(44)
+            .height(44)
             .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
             .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(21)
+            .borderRadius(22)
             .onClick(() => this.showDatePicker())
 
             if (this.hasDue) {
@@ -902,11 +905,11 @@ struct Index {
                   .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
               }
               .type(ButtonType.Normal)
-              .width(42)
-              .height(42)
+              .width(44)
+              .height(44)
               .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
               .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-              .borderRadius(21)
+              .borderRadius(22)
               .onClick(() => this.showTimePicker())
             }
 
@@ -917,11 +920,11 @@ struct Index {
                 .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .type(ButtonType.Normal)
-            .width(42)
-            .height(42)
+            .width(44)
+            .height(44)
             .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
             .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(21)
+            .borderRadius(22)
             .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
 
             Button() {
@@ -931,11 +934,11 @@ struct Index {
                 .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
             }
             .type(ButtonType.Normal)
-            .width(42)
-            .height(42)
+            .width(44)
+            .height(44)
             .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
             .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(21)
+            .borderRadius(22)
             .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
           }
           Blank().layoutWeight(1)
@@ -945,7 +948,7 @@ struct Index {
           Blank()
             .layoutWeight(1)
           Button('取消')
-            .height(42)
+            .height(44)
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .padding({ left: 18, right: 18 })
@@ -953,7 +956,7 @@ struct Index {
             .backgroundColor($r('app.color.surface_translucent'))
             .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
             .border({ width: 1, color: $r('app.color.bar_glass_edge') })
-            .borderRadius(21)
+            .borderRadius(22)
             .onClick(() => {
               this.showEditSheet = false;
               this.editingTask = null;
@@ -1067,7 +1070,7 @@ struct Index {
         .fontColor([$r('app.color.text_secondary')])
         .width(30)
       Text(label)
-        .fontSize(17)
+        .fontSize(16)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
         .layoutWeight(1)
@@ -1181,8 +1184,8 @@ struct Index {
       Column() {
         if (this.configured) {
           Row() {
-            Text(this.selectedTabIndex === 1 ? 'Caldav Tasks' : '待办事项')
-              .fontSize(30)
+            Text(this.selectedTabIndex === 1 ? '设置' : '待办事项')
+              .fontSize(28)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
               .layoutWeight(1)
@@ -1219,7 +1222,7 @@ struct Index {
               .textFont({ size: 16 })
               .placeholderFont({ size: 16 })
               .backgroundColor($r('app.color.surface'))
-              .borderRadius(18)
+              .borderRadius(16)
               .margin({ left: 22, right: 22, bottom: 4 })
           }
 
