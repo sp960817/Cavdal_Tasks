@@ -421,12 +421,25 @@ struct Index {
     return ['无', '每天', '每周', '每月'];
   }
 
+  private updateTaskListsImmediately(task: TodoTask, done: boolean): void {
+    const updated = VTodoCodec.setCompletion(task, done);
+    if (done) {
+      this.tasks = this.tasks.filter((item: TodoTask) => item.id !== task.id);
+      this.completed = [updated].concat(this.completed.filter((item: TodoTask) => item.id !== task.id));
+      return;
+    }
+    this.completed = this.completed.filter((item: TodoTask) => item.id !== task.id);
+    this.tasks = [updated].concat(this.tasks.filter((item: TodoTask) => item.id !== task.id));
+  }
+
   private async toggleTask(task: TodoTask, done: boolean): Promise<void> {
+    this.updateTaskListsImmediately(task, done);
     try {
       await this.syncService.setTaskCompleted(task.id, done);
       this.statusText = done ? '已完成' : '已恢复';
       await this.refreshLists();
     } catch (err) {
+      await this.refreshLists();
       this.statusText = `操作失败：${JSON.stringify(err)}`;
       this.safeShowToast('操作失败，请重试');
     }

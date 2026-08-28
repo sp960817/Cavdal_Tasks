@@ -34,30 +34,26 @@ export struct TaskCards {
     return this.activeTasks.filter((t: TodoTask) => !this.isRemoved(t.id));
   }
 
-  // 官方推荐：显式动画 animateTo 驱动状态变化（List 增删不自带动画）
+  // 行级隐式动画会跟随 completingIds 的状态变化稳定执行。
   private animateComplete(task: TodoTask): void {
     if (this.isCompleting(task.id) || this.isRemoved(task.id)) {
       return;
     }
-    this.getUIContext().animateTo({
-      duration: 260,
-      curve: Curve.EaseInOut,
-      onFinish: () => {
-        // 动画结束立即从视觉列表移除该行（不等网络刷新），消除悬停等待；
-        // 数据层 setTaskCompleted 在后台继续完成，refreshLists 后任务进已完成。
-        this.removedIds = this.removedIds.concat(task.id);
-        this.completingIds = this.completingIds.filter((id: string) => id !== task.id);
-        this.onToggleTask(task, true);
-        // 兜底：若同步失败任务仍在列表，2s 后恢复显示供用户重试
-        setTimeout(() => {
-          this.removedIds = this.removedIds.filter((id: string) => id !== task.id);
-        }, 2000);
+    this.completingIds = this.completingIds.concat(task.id);
+    // 不依赖 animateTo 的 onFinish 回调：部分设备上该回调未触发时，
+    // 任务会永久停留在当前列表。动画结束后再更新数据和视觉列表。
+    setTimeout(() => {
+      if (!this.isCompleting(task.id)) {
+        return;
       }
-    }, () => {
-      // 关键：状态变更必须在 animateTo 闭包内执行，
-      // ArkUI 才能捕捉"可见→透明"的差异并生成过渡动画。
-      this.completingIds = this.completingIds.concat(task.id);
-    });
+      this.removedIds = this.removedIds.concat(task.id);
+      this.completingIds = this.completingIds.filter((id: string) => id !== task.id);
+      this.onToggleTask(task, true);
+      // 若同步失败，恢复显示供用户重试。
+      setTimeout(() => {
+        this.removedIds = this.removedIds.filter((id: string) => id !== task.id);
+      }, 2000);
+    }, 260);
   }
 
   @Builder
@@ -65,7 +61,7 @@ export struct TaskCards {
     Column({ space: 2 }) {
       Row({ space: 8 }) {
         Stack({ alignContent: Alignment.Center }) {
-          Toggle({ type: ToggleType.Checkbox, isOn: false })
+          Toggle({ type: ToggleType.Checkbox, isOn: this.isCompleting(task.id) })
             .onChange((isOn: boolean) => {
               if (isOn) {
                 this.animateComplete(task);
@@ -135,6 +131,7 @@ export struct TaskCards {
       $r('app.color.danger_soft') : Color.Transparent)
     .opacity(this.isCompleting(task.id) ? 0 : 1)
     .translate({ x: 0, y: this.isCompleting(task.id) ? 6 : 0 })
+    .animation({ duration: 260, curve: Curve.EaseInOut })
   }
 
   @Builder

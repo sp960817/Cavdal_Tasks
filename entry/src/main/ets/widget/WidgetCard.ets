@@ -41,12 +41,25 @@ function isLightHostColor(color: string): boolean {
   return red * 299 + green * 587 + blue * 114 > 160000;
 }
 
-function foregroundColorFor(hostColor: string): string {
-  return isLightHostColor(hostColor) ? '#DE000000' : '#F2FFFFFF';
+// FormKit supplies the inverse of the host background color. A dark inverse
+// therefore means the host background is light, and vice versa.
+function hasLightHostBackground(inverseHostColor: string): boolean {
+  return !isLightHostColor(inverseHostColor);
 }
 
-function backgroundColorFor(style: string, hostColor: string): string {
-  const lightHost = isLightHostColor(hostColor);
+function foregroundColorFor(inverseHostColor: string): string {
+  if ((inverseHostColor.length === 7 || inverseHostColor.length === 9) &&
+    inverseHostColor.startsWith('#')) {
+    return inverseHostColor;
+  }
+  return '#F2FFFFFF';
+}
+
+function backgroundColorFor(style: string, inverseHostColor: string): string {
+  const lightHost = hasLightHostBackground(inverseHostColor);
+  if (style === 'none') {
+    return '#00000000';
+  }
   if (style === 'thin') {
     return lightHost ? '#1AFFFFFF' : '#2E000000';
   }
@@ -59,11 +72,12 @@ function backgroundColorFor(style: string, hostColor: string): string {
   return '#00000000';
 }
 
-function borderColorFor(style: string, hostColor: string): string {
+function borderColorFor(style: string, inverseHostColor: string): string {
+  const lightHost = hasLightHostBackground(inverseHostColor);
   if (style === 'none') {
     return '#00000000';
   }
-  return isLightHostColor(hostColor) ? '#24000000' : '#33FFFFFF';
+  return lightHost ? '#24000000' : '#33FFFFFF';
 }
 
 let storage = new LocalStorage();
@@ -123,7 +137,7 @@ struct WidgetCard {
     if (this.isWide()) {
       return 28;
     }
-    return this.isLarge() ? 30 : 34;
+    return this.isLarge() ? 30 : 30;
   }
 
   private completeTask(task: CardTask): void {
@@ -148,7 +162,7 @@ struct WidgetCard {
   }
 
   build() {
-    Column({ space: 4 }) {
+    Column({ space: this.usesCompactVisual() ? 3 : 4 }) {
       Row({ space: 6 }) {
         Text('待办')
           .fontSize(this.usesCompactVisual() ? 14 : 15)
@@ -166,7 +180,7 @@ struct WidgetCard {
           .opacity(0.72)
       }
       .width('100%')
-      .height(this.isWide() ? 20 : 24)
+      .height(this.isWide() ? 20 : this.usesCompactVisual() ? 22 : 24)
       .padding({ left: 4, right: 4 })
       .onClick(() => this.openApp())
 
@@ -188,10 +202,10 @@ struct WidgetCard {
         .justifyContent(FlexAlign.Center)
         .onClick(() => this.openApp())
       } else {
-        List({ space: this.isWide() ? 0 : 2 }) {
+        List({ space: this.isWide() ? 0 : 1 }) {
           ForEach(this.cardTasks, (task: CardTask) => {
             ListItem() {
-              Row({ space: 6 }) {
+              Row({ space: 4 }) {
                 Stack({ alignContent: Alignment.Center }) {
                   Text('')
                     .width(18)
@@ -213,7 +227,7 @@ struct WidgetCard {
                     })
                     .animation({ duration: 500, curve: Curve.EaseOut })
                 }
-                .width(30)
+                .width(22)
                 .height(this.taskRowHeight())
                 .onClick(() => this.completeTask(task))
 
@@ -223,8 +237,8 @@ struct WidgetCard {
                   .fontColor(this.tc())
                   .opacity(this.completingId === task.id ? 0 : 1)
                   .animation({ duration: 600, curve: Curve.EaseOut })
-                  .maxLines(this.isWide() ? 1 : 2)
-                  .lineHeight(16)
+                  .maxLines(this.isLarge() ? 2 : 1)
+                  .lineHeight(this.isLarge() ? 16 : 14)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .layoutWeight(1)
                   .onClick(() => this.openApp())
@@ -263,17 +277,17 @@ struct WidgetCard {
         Blank()
       }
       .width('100%')
-      .height(this.isWide() ? 12 : 14)
+      .height(this.isWide() ? 12 : this.usesCompactVisual() ? 12 : 14)
       .padding({ left: 4, right: 4 })
       .onClick(() => this.openApp())
     }
     .width('100%')
     .height('100%')
     .padding({
-      left: this.isWide() ? 12 : 10,
-      right: this.isWide() ? 12 : 10,
-      top: this.isWide() ? 6 : 10,
-      bottom: this.isWide() ? 5 : 8
+      left: this.isWide() ? 12 : 8,
+      right: this.isWide() ? 12 : 8,
+      top: this.isWide() ? 6 : this.usesCompactVisual() ? 8 : 10,
+      bottom: this.isWide() ? 5 : this.usesCompactVisual() ? 6 : 8
     })
     .backgroundColor(backgroundColorFor(this.widgetBlurStyle, this.textColor))
     .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
