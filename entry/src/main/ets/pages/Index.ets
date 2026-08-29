@@ -46,8 +46,6 @@ struct Index {
   private tabBarLayoutPassTriggered: boolean = false;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
-  @State showCompleted: boolean = false;
-  @State completedUserOverride: boolean = true;
   @State homeViewportHeight: number = 0;
   @State searchQuery: string = '';
   @State editingTask: TodoTask | null = null;
@@ -467,11 +465,6 @@ struct Index {
     this.showEditSheet = true;
   }
 
-  private setCompletedOpen(open: boolean): void {
-    this.showCompleted = open;
-    this.completedUserOverride = true;
-  }
-
   private async deleteTaskInList(task: TodoTask): Promise<void> {
     try {
       await this.syncService.deleteTask(task.id);
@@ -611,13 +604,12 @@ struct Index {
 
   private homeLayout(): HomeLayoutMetrics {
     return calculateHomeLayout(this.homeViewportHeight, this.filteredActiveTasks().length,
-      this.pendingTaskCount(), this.filteredCompletedTasks().length,
-      this.completedUserOverride, this.showCompleted);
+      this.pendingTaskCount());
   }
 
   @Builder
   private SettingsView() {
-    Column({ space: 14 }) {
+    Column({ space: 12 }) {
       this.ServerSettingsMenu()
       WidgetAppearanceCard({
         selectedStyle: this.widgetBlurStyle,
@@ -681,8 +673,6 @@ struct Index {
         completedTasks: this.filteredCompletedTasks(),
         completedTotalCount: this.completed.length,
         activeHeight: this.homeLayout().activeHeight,
-        completedHeight: this.homeLayout().completedHeight,
-        completedOpen: this.homeLayout().completedOpen,
         onToggleTask: (task: TodoTask, done: boolean): void => {
           this.toggleTask(task, done);
         },
@@ -694,24 +684,19 @@ struct Index {
         },
         onAddTask: (): void => {
           this.openAddSheet();
-        },
-        onCompletedOpenChange: (open: boolean): void => {
-          this.setCompletedOpen(open);
         }
       })
 
       Text(this.statusText)
-        .fontSize(11)
-        .fontColor($r('app.color.text_tertiary'))
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
         .width('100%')
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-        .backgroundColor($r('app.color.surface_translucent'))
-        .borderRadius(12)
+        .padding({ top: 2, bottom: 2 })
     }
-    .padding({ left: 22, right: 22, top: 4, bottom: 132 })
+    .padding({ left: 20, right: 20, top: 8, bottom: 132 })
     .width('100%')
     .height('100%')
   }
@@ -1198,8 +1183,8 @@ struct Index {
         if (this.configured) {
           Row() {
             Text(this.selectedTabIndex === 1 ? '设置' : '待办事项')
-              .fontSize(28)
-              .fontWeight(FontWeight.Bold)
+              .fontSize(26)
+              .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
               .layoutWeight(1)
 
@@ -1209,13 +1194,11 @@ struct Index {
                 .fontColor([this.showSearch || this.searchQuery.length > 0 ? $r('app.color.accent') : $r('app.color.text_secondary')])
             }
             .type(ButtonType.Normal)
-            .width(44)
-            .height(44)
-            .backgroundColor($r('app.color.surface_translucent'))
-            .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-            .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .margin({ right: 8 })
+            .width(42)
+            .height(42)
+            .backgroundColor($r('app.color.surface'))
+            .border({ width: 0.5, color: $r('app.color.divider') })
+            .borderRadius(14)
             .onClick(() => {
               if (this.searchQuery.length > 0) {
                 this.searchQuery = '';
@@ -1226,7 +1209,7 @@ struct Index {
 
           }
           .width('100%')
-          .padding({ left: 22, right: 22, top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 4 })
+          .padding({ left: 20, right: 20, top: this.uiContext.px2vp(this.statusBarHeight) + 10, bottom: 8 })
 
           if (this.showSearch) {
             Search({ value: this.searchQuery, placeholder: '搜索待办事项...' })
@@ -1235,8 +1218,8 @@ struct Index {
               .textFont({ size: 16 })
               .placeholderFont({ size: 16 })
               .backgroundColor($r('app.color.surface'))
-              .borderRadius(16)
-              .margin({ left: 22, right: 22, bottom: 4 })
+              .borderRadius(14)
+              .margin({ left: 20, right: 20, bottom: 6 })
           }
 
           if (deviceInfo.apiAvailable('26.0.0')) {

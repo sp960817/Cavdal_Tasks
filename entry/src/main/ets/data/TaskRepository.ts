@@ -358,7 +358,10 @@ export class TaskRepository {
     return this.queryTasks("SELECT * FROM tasks WHERE status <> 'COMPLETED' ORDER BY due = '', due ASC, priority DESC, updated_at DESC", []);
   }
 
-  async completedTasks(limit: number = 20): Promise<TodoTask[]> {
+  async completedTasks(limit?: number): Promise<TodoTask[]> {
+    if (limit === undefined) {
+      return this.queryTasks('SELECT * FROM tasks WHERE status = ? ORDER BY completed_at DESC', ['COMPLETED']);
+    }
     return this.queryTasks('SELECT * FROM tasks WHERE status = ? ORDER BY completed_at DESC LIMIT ?', ['COMPLETED', limit]);
   }
 

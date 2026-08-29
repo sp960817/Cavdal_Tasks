@@ -8,18 +8,16 @@ export struct TaskCards {
   @Prop completedTasks: TodoTask[] = [];
   @Prop completedTotalCount: number = 0;
   @Prop activeHeight: number = 108;
-  @Prop completedHeight: number = 58;
-  @Prop completedOpen: boolean = false;
   // 正在播放"完成"动画的任务 id 集合，驱动删除线/淡出过渡
   @State completingIds: string[] = [];
   // 动画已结束、已从视觉列表移除（不等网络刷新）的任务 id 集合
   @State removedIds: string[] = [];
+  @State showCompletedSheet: boolean = false;
   onToggleTask: (task: TodoTask, done: boolean) => void =
     (_task: TodoTask, _done: boolean): void => {};
   onEditTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
   onDeleteTask: (task: TodoTask) => void = (_task: TodoTask): void => {};
   onAddTask: () => void = (): void => {};
-  onCompletedOpenChange: (open: boolean) => void = (_open: boolean): void => {};
 
   private isCompleting(taskId: string): boolean {
     return this.completingIds.indexOf(taskId) >= 0;
@@ -59,7 +57,7 @@ export struct TaskCards {
   @Builder
   private ActiveTaskRow(task: TodoTask) {
     Column({ space: 2 }) {
-      Row({ space: 8 }) {
+      Row({ space: 6 }) {
         Stack({ alignContent: Alignment.Center }) {
           Toggle({ type: ToggleType.Checkbox, isOn: this.isCompleting(task.id) })
             .onChange((isOn: boolean) => {
@@ -70,7 +68,7 @@ export struct TaskCards {
             .width(22)
             .height(22)
         }
-        .width(40)
+        .width(36)
         .height(40)
 
         Text(task.title)
@@ -90,7 +88,7 @@ export struct TaskCards {
           Text(formatDueForDisplay(task.due))
             .fontSize(14)
             .fontColor(this.isCompleting(task.id) ?
-              $r('app.color.text_disabled') : $r('app.color.accent'))
+              $r('app.color.text_disabled') : $r('app.color.text_secondary'))
         }
 
         if (VTodoCodec.detectReminder(task.rawIcs, task.due) !== '无') {
@@ -136,7 +134,7 @@ export struct TaskCards {
 
   @Builder
   private CompletedTaskRow(task: TodoTask) {
-    Row({ space: 8 }) {
+    Row({ space: 6 }) {
       Stack({ alignContent: Alignment.Center }) {
         Toggle({ type: ToggleType.Checkbox, isOn: true })
           .onChange((isOn: boolean) => {
@@ -147,7 +145,7 @@ export struct TaskCards {
           .width(22)
           .height(22)
       }
-      .width(40)
+      .width(36)
       .height(40)
 
       Text(task.title)
@@ -186,7 +184,7 @@ export struct TaskCards {
     .height('100%')
     .justifyContent(FlexAlign.Center)
     .backgroundColor($r('app.color.danger'))
-    .borderRadius({ topRight: 16, bottomRight: 16 })
+    .borderRadius({ topRight: 14, bottomRight: 14 })
     .onClick(() => this.onDeleteTask(task))
   }
 
@@ -195,11 +193,11 @@ export struct TaskCards {
     Column() {
       Row({ space: 6 }) {
         Text('未完成')
-          .fontSize(16)
+        .fontSize(15)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_secondary'))
         Text(`${this.visibleActiveTasks().length}`)
-          .fontSize(13)
+          .fontSize(12)
           .fontColor($r('app.color.text_tertiary'))
         Blank()
       }
@@ -271,89 +269,124 @@ export struct TaskCards {
     }
     .width('100%')
     .height(this.activeHeight)
-    .padding({ left: 16, right: 8, top: 10, bottom: 10 })
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(18)
+    .padding({ left: 14, right: 12, top: 10, bottom: 10 })
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 0.5, color: $r('app.color.divider') })
+    .borderRadius(16)
   }
 
   @Builder
   private CompletedTasksCard() {
     Column() {
-      Row({ space: 8 }) {
+      Row({ space: 6 }) {
         Text('已完成')
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_tertiary'))
-        Text(`${this.completedTotalCount}`)
           .fontSize(15)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_secondary'))
+        Text(`${this.completedTotalCount}`)
+          .fontSize(12)
           .fontColor($r('app.color.text_tertiary'))
-        SymbolGlyph(this.completedOpen ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize(18)
+        Blank()
+          .layoutWeight(1)
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(14)
           .fontColor([$r('app.color.text_disabled')])
       }
       .width('100%')
-      .height(34)
-      .justifyContent(FlexAlign.Center)
-      .margin({ bottom: this.completedOpen ? 8 : 0 })
-      .onClick(() => this.onCompletedOpenChange(!this.completedOpen))
+      .height(38)
+      .justifyContent(FlexAlign.Start)
+      .onClick(() => this.showCompletedSheet = true)
+    }
+    .width('100%')
+    .height(58)
+    .padding({ left: 14, right: 12, top: 10, bottom: 10 })
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 0.5, color: $r('app.color.divider') })
+    .borderRadius(16)
+  }
 
-      if (this.completedOpen) {
-        if (this.completedTasks.length === 0) {
-          Column({ space: 6 }) {
-            SymbolGlyph($r('sys.symbol.checkmark'))
-              .fontSize(30)
-              .fontColor([$r('app.color.text_disabled')])
-              .opacity(0.5)
-            Text('暂无已完成事项')
-              .fontSize(15)
-              .fontColor($r('app.color.text_disabled'))
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .justifyContent(FlexAlign.Center)
-          .alignItems(HorizontalAlign.Center)
-        } else {
-          List({ space: 0 }) {
-            ForEach(this.completedTasks, (task: TodoTask) => {
-              ListItem() {
-                this.CompletedTaskRow(task)
-              }
-              .swipeAction({
-                end: {
-                  builder: () => {
-                    this.DeleteSwipeAction(task)
-                  },
-                  onAction: () => this.onDeleteTask(task)
-                }
-              })
-            }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
-          }
-          .width('100%')
-          .layoutWeight(1)
-          .scrollBar(BarState.Auto)
-          .edgeEffect(EdgeEffect.Spring)
-          .align(Alignment.TopStart)
+  @Builder
+  private CompletedTasksSheetContent() {
+    Column({ space: 12 }) {
+      Row() {
+        Column({ space: 2 }) {
+          Text('已完成')
+            .fontSize(22)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text(`${this.completedTotalCount} 项已完成任务`)
+            .fontSize(13)
+            .fontColor($r('app.color.text_secondary'))
         }
+        .layoutWeight(1)
+        .alignItems(HorizontalAlign.Start)
+
+        Button() {
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(18)
+            .fontColor([$r('app.color.text_secondary')])
+        }
+        .type(ButtonType.Normal)
+        .width(38)
+        .height(38)
+        .backgroundColor($r('app.color.surface_input'))
+        .borderRadius(19)
+        .onClick(() => this.showCompletedSheet = false)
+      }
+      .width('100%')
+
+      if (this.completedTasks.length === 0) {
+        Column({ space: 8 }) {
+          SymbolGlyph($r('sys.symbol.checkmark_circle'))
+            .fontSize(38)
+            .fontColor([$r('app.color.text_disabled')])
+          Text('暂无已完成事项')
+            .fontSize(15)
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+        .alignItems(HorizontalAlign.Center)
+      } else {
+        List({ space: 0 }) {
+          ForEach(this.completedTasks, (task: TodoTask) => {
+            ListItem() {
+              this.CompletedTaskRow(task)
+            }
+            .swipeAction({
+              end: {
+                builder: () => {
+                  this.DeleteSwipeAction(task)
+                },
+                onAction: () => this.onDeleteTask(task)
+              }
+            })
+          }, (task: TodoTask) => `${task.id}-${task.updatedAt}-${task.syncState}`)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollBar(BarState.Auto)
+        .edgeEffect(EdgeEffect.Spring)
+        .align(Alignment.TopStart)
       }
     }
     .width('100%')
-    .height(this.completedHeight)
-    .padding({ left: 16, right: 8, top: 12, bottom: 12 })
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
-    .borderRadius(18)
+    .height('100%')
+    .padding({ left: 20, right: 16, top: 20, bottom: 24 })
   }
 
   build() {
-    Column({ space: 14 }) {
+    Column({ space: 12 }) {
       this.ActiveTasksCard()
       this.CompletedTasksCard()
     }
     .width('100%')
+    .bindSheet($$this.showCompletedSheet, this.CompletedTasksSheetContent(), {
+      detents: [SheetSize.MEDIUM, SheetSize.LARGE],
+      backgroundColor: $r('app.color.surface_translucent'),
+      blurStyle: BlurStyle.COMPONENT_THIN,
+      showClose: false
+    })
   }
 }
