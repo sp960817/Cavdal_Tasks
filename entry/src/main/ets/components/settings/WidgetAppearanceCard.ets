@@ -40,9 +40,8 @@ export struct WidgetAppearanceCard {
     }
     .width('100%')
     .padding(14)
-    .backgroundColor($r('app.color.surface_translucent'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-    .border({ width: 0.5, color: $r('app.color.bar_glass_edge') })
+    .backgroundColor($r('app.color.surface'))
+    .border({ width: 0.5, color: $r('app.color.divider') })
     .borderRadius(16)
   }
 }
