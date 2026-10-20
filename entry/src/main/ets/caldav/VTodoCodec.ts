@@ -128,9 +128,23 @@ export class VTodoCodec {
     const lines = unfold(input);
     const todoLines = findComponentLines(lines, 'VTODO');
     const props: VTodoProperty[] = [];
+    let childDepth = 0;
     for (let i = 0; i < todoLines.length; i++) {
       const prop = splitProperty(todoLines[i]);
-      if (prop !== undefined) {
+      if (prop === undefined) {
+        continue;
+      }
+      if (prop.name === 'BEGIN') {
+        childDepth++;
+        continue;
+      }
+      if (prop.name === 'END') {
+        childDepth = Math.max(0, childDepth - 1);
+        continue;
+      }
+      // VALARM has its own DESCRIPTION, which is not the task's body.
+      // Only direct VTODO properties belong to the task.
+      if (childDepth === 0) {
         props.push(prop);
       }
     }

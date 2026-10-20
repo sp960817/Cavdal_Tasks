@@ -116,6 +116,7 @@ export class CredentialStore {
 
 export class SettingsStore {
   private pref?: preferences.Preferences;
+  private static widgetStyleWrites: Promise<void> = Promise.resolve();
 
   constructor(private context: common.Context) {
   }
@@ -150,21 +151,46 @@ export class SettingsStore {
     }
   }
 
-  async save(settings: AccountSettings): Promise<void> {
+  async saveAccount(serverUrl: string, username: string, calendarHref: string, calendarName: string): Promise<void> {
     try {
       const pref = await this.prefs();
-      await pref.put('serverUrl', settings.serverUrl);
-      await pref.put('username', settings.username);
-      await pref.put('calendarHref', settings.calendarHref);
-      await pref.put('calendarName', settings.calendarName);
-      await pref.put('lastSyncAt', settings.lastSyncAt);
-      await pref.put('widgetBlurStyle', settings.widgetBlurStyle);
-      await pref.put('handednessEnabled', settings.handednessEnabled ? 'true' : 'false');
+      await pref.put('serverUrl', serverUrl);
+      await pref.put('username', username);
+      await pref.put('calendarHref', calendarHref);
+      await pref.put('calendarName', calendarName);
+      await pref.put('lastSyncAt', 0);
       await pref.flush();
     } catch (err) {
-      console.error(`[SettingsStore] save failed: ${errorText(err)}`);
-      throw new Error(`save settings failed: ${errorText(err)}`);
+      console.error(`[SettingsStore] saveAccount failed: ${errorText(err)}`);
+      throw new Error(`save account failed: ${errorText(err)}`);
     }
+  }
+
+  private async saveValue(key: string, value: string | number): Promise<void> {
+    try {
+      const pref = await this.prefs();
+      await pref.put(key, value);
+      await pref.flush();
+    } catch (err) {
+      console.error(`[SettingsStore] save ${key} failed: ${errorText(err)}`);
+      throw new Error(`save setting ${key} failed: ${errorText(err)}`);
+    }
+  }
+
+  async saveWidgetBlurStyle(style: WidgetBlurStyle): Promise<void> {
+    // Preserve click order even when an earlier preferences write is delayed.
+    const write = SettingsStore.widgetStyleWrites.then(() => this.saveValue('widgetBlurStyle', style));
+    SettingsStore.widgetStyleWrites = write.catch(() => {});
+    await write;
+  }
+
+  async saveHandedness(enabled: boolean): Promise<void> {
+    await this.saveValue('handednessEnabled', enabled ? 'true' : 'false');
+  }
+
+  async saveLastSyncAt(value: number): Promise<void> {
+    // A completed sync must not restore the appearance snapshot read at its start.
+    await this.saveValue('lastSyncAt', value);
   }
 
   async clear(): Promise<void> {
@@ -427,7 +453,7 @@ export class TaskRepository {
       result = await store.querySql(sql, args);
       const out: TodoTask[] = [];
       while (result.goToNextRow()) {
-        out.push({
+        const task: TodoTask = {
           id: result.getString(result.getColumnIndex('id')),
           uid: result.getString(result.getColumnIndex('uid')),
           href: result.getString(result.getColumnIndex('href')),
@@ -443,7 +469,14 @@ export class TaskRepository {
           rawIcs: result.getString(result.getColumnIndex('raw_ics')),
           syncState: result.getString(result.getColumnIndex('sync_state')) as 'synced' | 'pending' | 'conflict' | 'error',
           updatedAt: result.getLong(result.getColumnIndex('updated_at'))
-        });
+        };
+        // Older caches included VALARM text in the task description. Read the
+        // actual VTODO body from its preserved ICS without changing sync state.
+        const parsed = VTodoCodec.toTask(task.rawIcs, task.href, task.calendarHref, task.etag);
+        if (parsed !== undefined) {
+          task.description = parsed.description;
+        }
+        out.push(task);
       }
       return out;
     } catch (err) {

@@ -2,31 +2,31 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "拾序 · 让每一天井然有序"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "拾序 · 让每一天井然有序"
     },
     {
       "name": "EntryAbility_label",
-      "value": "Caldav Tasks"
+      "value": "拾序"
     },
     {
       "name": "EntryFormAbility_label",
-      "value": "Todo"
+      "value": "拾序"
     },
     {
       "name": "EntryFormAbility_desc",
-      "value": "CalDAV todo widget"
+      "value": "查看与完成待办，随时拾起生活的秩序"
     },
     {
       "name": "widget_todo_name",
-      "value": "Todo"
+      "value": "拾序"
     },
     {
       "name": "widget_todo_desc",
-      "value": "Quickly complete CalDAV tasks"
+      "value": "查看与完成待办，随时拾起生活的秩序"
     }
   ]
 }

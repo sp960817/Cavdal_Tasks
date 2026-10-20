@@ -1,36 +1,148 @@
 {
   "color": [
-    { "name": "start_window_background", "value": "#FFFFFF" },
-    { "name": "page_background", "value": "#F2F4FA" },
-    { "name": "surface", "value": "#FFFFFF" },
-    { "name": "surface_translucent", "value": "#F9FAFC" },
-    { "name": "surface_input", "value": "#F2F3F7" },
-    { "name": "surface_subtle", "value": "#F7F8FA" },
-    { "name": "text_primary", "value": "#16181D" },
-    { "name": "text_secondary", "value": "#5C6670" },
-    { "name": "text_tertiary", "value": "#767E89" },
-    { "name": "text_disabled", "value": "#C7C9CE" },
-    { "name": "divider", "value": "#E8E9EC" },
-    { "name": "accent", "value": "#4778FF" },
-    { "name": "accent_soft", "value": "#EEF3FF" },
-    { "name": "on_accent", "value": "#FFFFFF" },
-    { "name": "icon_background", "value": "#10000000" },
-    { "name": "overlay", "value": "#78000000" },
-    { "name": "danger", "value": "#F04438" },
-    { "name": "danger_text", "value": "#B42318" },
-    { "name": "danger_soft", "value": "#FEF1F0" },
-    { "name": "warning_text", "value": "#926B00" },
-    { "name": "success", "value": "#20C99A" },
-    { "name": "shadow", "value": "#30000000" },
-    { "name": "widget_text", "value": "#17283B" },
-    { "name": "widget_secondary", "value": "#718194" },
-    { "name": "widget_circle", "value": "#4178FF" },
-    { "name": "widget_text_primary", "value": "#E6000000" },
-    { "name": "widget_text_secondary", "value": "#99000000" },
-    { "name": "widget_check_border", "value": "#66000000" },
-    { "name": "widget_check_fill", "value": "#E6000000" },
-    { "name": "transparent", "value": "#00FFFFFF" },
-    { "name": "bar_glass", "value": "#80F9FAFC" },
-    { "name": "bar_glass_edge", "value": "#33FFFFFF" }
+    {
+      "name": "start_window_background",
+      "value": "#F5F3EE"
+    },
+    {
+      "name": "page_background",
+      "value": "#F5F3EE"
+    },
+    {
+      "name": "surface",
+      "value": "#FFFEFB"
+    },
+    {
+      "name": "surface_translucent",
+      "value": "#EFFFFEFB"
+    },
+    {
+      "name": "surface_input",
+      "value": "#E9EDF0"
+    },
+    {
+      "name": "surface_subtle",
+      "value": "#ECEEEB"
+    },
+    {
+      "name": "text_primary",
+      "value": "#19252E"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#536571"
+    },
+    {
+      "name": "text_tertiary",
+      "value": "#697985"
+    },
+    {
+      "name": "text_disabled",
+      "value": "#8E9CA5"
+    },
+    {
+      "name": "divider",
+      "value": "#DEE3E4"
+    },
+    {
+      "name": "accent",
+      "value": "#4C6D8D"
+    },
+    {
+      "name": "accent_soft",
+      "value": "#E1EAF1"
+    },
+    {
+      "name": "on_accent",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "icon_background",
+      "value": "#10000000"
+    },
+    {
+      "name": "overlay",
+      "value": "#78000000"
+    },
+    {
+      "name": "danger",
+      "value": "#F04438"
+    },
+    {
+      "name": "danger_text",
+      "value": "#B42318"
+    },
+    {
+      "name": "danger_soft",
+      "value": "#FEF1F0"
+    },
+    {
+      "name": "warning_text",
+      "value": "#926B00"
+    },
+    {
+      "name": "success",
+      "value": "#287C65"
+    },
+    {
+      "name": "shadow",
+      "value": "#18405262"
+    },
+    {
+      "name": "widget_text",
+      "value": "#17283B"
+    },
+    {
+      "name": "widget_secondary",
+      "value": "#718194"
+    },
+    {
+      "name": "widget_circle",
+      "value": "#4C6D8D"
+    },
+    {
+      "name": "widget_text_primary",
+      "value": "#E6000000"
+    },
+    {
+      "name": "widget_text_secondary",
+      "value": "#99000000"
+    },
+    {
+      "name": "widget_check_border",
+      "value": "#66000000"
+    },
+    {
+      "name": "widget_check_fill",
+      "value": "#E6000000"
+    },
+    {
+      "name": "transparent",
+      "value": "#00FFFFFF"
+    },
+    {
+      "name": "bar_glass",
+      "value": "#80F6F8FA"
+    },
+    {
+      "name": "bar_glass_edge",
+      "value": "#A6FFFFFF"
+    },
+    {
+      "name": "hero_start",
+      "value": "#E4EDF2"
+    },
+    {
+      "name": "hero_end",
+      "value": "#F2F1E9"
+    },
+    {
+      "name": "glass_fill",
+      "value": "#99FFFFFF"
+    },
+    {
+      "name": "glass_edge",
+      "value": "#B3FFFFFF"
+    }
   ]
 }

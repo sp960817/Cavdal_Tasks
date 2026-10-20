@@ -2,7 +2,7 @@
   "forms": [
     {
       "name": "cavdal_tasks",
-      "displayName": "Caldav Tasks",
+      "displayName": "拾序",
       "description": "CalDAV 待办事项",
       "src": "./ets/widget/WidgetCard.ets",
       "uiSyntax": "arkts",

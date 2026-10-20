@@ -6,6 +6,13 @@ interface CardTask {
   hasReminder: boolean;
 }
 
+// Non-virtual Repeat updates retained rows only when their content key changes.
+function cardTaskRenderKey(task: CardTask): string {
+  return JSON.stringify([
+    task.id, task.title, task.due, task.syncState, task.hasReminder ? '1' : '0'
+  ]);
+}
+
 function parseTasks(value: string): CardTask[] {
   try {
     return JSON.parse(value) as CardTask[];
@@ -48,11 +55,9 @@ function hasLightHostBackground(inverseHostColor: string): boolean {
 }
 
 function foregroundColorFor(inverseHostColor: string): string {
-  if ((inverseHostColor.length === 7 || inverseHostColor.length === 9) &&
-    inverseHostColor.startsWith('#')) {
-    return inverseHostColor;
-  }
-  return '#F2FFFFFF';
+  // Keep the host's light/dark decision, without inheriting a translucent or
+  // tinted foreground that becomes hard to read over a detailed wallpaper.
+  return hasLightHostBackground(inverseHostColor) ? '#FF17232E' : '#FFF7F9FC';
 }
 
 function backgroundColorFor(style: string, inverseHostColor: string): string {
@@ -61,13 +66,13 @@ function backgroundColorFor(style: string, inverseHostColor: string): string {
     return '#00000000';
   }
   if (style === 'thin') {
-    return lightHost ? '#1AFFFFFF' : '#2E000000';
+    return lightHost ? '#35FFFEFB' : '#3B10171D';
   }
   if (style === 'regular') {
-    return lightHost ? '#2EFFFFFF' : '#46000000';
+    return lightHost ? '#78FFFEFB' : '#851B252E';
   }
   if (style === 'thick') {
-    return lightHost ? '#66FFFFFF' : '#66000000';
+    return lightHost ? '#D9FFFEFB' : '#E01B252E';
   }
   return '#00000000';
 }
@@ -93,6 +98,7 @@ struct WidgetCard {
   @LocalStorageProp('formDimension') formDimension: string = '2';
   @State completingId: string = '';
   @State cardTasks: CardTask[] = [];
+  @State taskListHeight: number = 0;
 
   aboutToAppear(): void {
     this.cardTasks = parseTasks(this.tasksJson);
@@ -122,7 +128,15 @@ struct WidgetCard {
   }
 
   private usesCompactVisual(): boolean {
-    return this.formDimension !== '3';
+    return this.formDimension === '1' || this.formDimension === '2';
+  }
+
+  private isMini(): boolean {
+    return this.formDimension === '1';
+  }
+
+  private isSquare(): boolean {
+    return this.formDimension === '2';
   }
 
   private isWide(): boolean {
@@ -134,13 +148,24 @@ struct WidgetCard {
   }
 
   private taskRowHeight(): number {
-    if (this.isWide()) {
+    if (this.isMini()) {
       return 28;
     }
-    return this.isLarge() ? 30 : 30;
+    if (this.isWide()) {
+      return 34;
+    }
+    if (this.isLarge()) {
+      return 44;
+    }
+    // Three complete rows on the square card, including the two 2vp gaps.
+    // onSizeChange also handles launcher resizing without rebuilding the form.
+    return this.taskListHeight > 0 ? Math.max(26, Math.floor((this.taskListHeight - 4) / 3)) : 32;
   }
 
   private completeTask(task: CardTask): void {
+    if (this.completingId === task.id) {
+      return;
+    }
     this.completingId = task.id;
     postCardAction(this, {
       action: 'message',
@@ -162,39 +187,41 @@ struct WidgetCard {
   }
 
   build() {
-    Column({ space: this.usesCompactVisual() ? 3 : 4 }) {
+    Column({ space: this.usesCompactVisual() ? 3 : 5 }) {
       Row({ space: 6 }) {
-        Text('待办')
+        Text('拾序')
           .fontSize(this.usesCompactVisual() ? 14 : 15)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.tc())
-        Text(`${this.cardTasks.length}`)
+        Text(`${this.cardTasks.length} 件事`)
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.tc())
-          .opacity(0.68)
+          .opacity(0.86)
         Blank()
         SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(12)
           .fontColor([this.tc()])
-          .opacity(0.72)
+          .opacity(0.86)
       }
       .width('100%')
-      .height(this.isWide() ? 20 : this.usesCompactVisual() ? 22 : 24)
-      .padding({ left: 4, right: 4 })
+      .height(this.usesCompactVisual() ? 22 : 26)
+      .padding({ left: 3, right: 3 })
       .onClick(() => this.openApp())
 
       if (this.cardTasks.length === 0) {
         Column({ space: 5 }) {
-          Text('今日清爽')
-            .fontSize(15)
+          if (!this.isMini()) {
+            Image($r('app.media.material_empty_tray'))
+              .width(this.isLarge() ? 64 : 48)
+              .height(this.isLarge() ? 64 : 48)
+              .objectFit(ImageFit.Contain)
+              .accessibilityLevel('no')
+          }
+          Text('今天，从容一点')
+            .fontSize(this.isMini() ? 12 : 14)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.tc())
-            .textAlign(TextAlign.Center)
-          Text(this.lastSyncText)
-            .fontSize(10)
-            .fontColor(this.tc())
-            .opacity(0.75)
             .textAlign(TextAlign.Center)
         }
         .layoutWeight(1)
@@ -202,53 +229,55 @@ struct WidgetCard {
         .justifyContent(FlexAlign.Center)
         .onClick(() => this.openApp())
       } else {
-        List({ space: this.isWide() ? 0 : 1 }) {
-          ForEach(this.cardTasks, (task: CardTask) => {
+        List({ space: this.isSquare() ? 2 : 3 }) {
+          Repeat(this.cardTasks).each((row: RepeatItem<CardTask>) => {
             ListItem() {
-              Row({ space: 4 }) {
+              Row({ space: this.isSquare() ? 4 : 5 }) {
                 Stack({ alignContent: Alignment.Center }) {
                   Text('')
                     .width(18)
                     .height(18)
                     .borderRadius(9)
-                    .border({ width: 1.8, color: this.tc() })
-                    .backgroundColor(this.completingId === task.id ?
-                      '#4778FF' : '#00000000')
+                    .border({ width: 1.4, color: this.tc() })
+                    .backgroundColor(this.completingId === row.item.id ?
+                      '#4C6D8D' : '#00000000')
                     .animation({ duration: 400, curve: Curve.EaseOut })
 
                   Text('✓')
                     .fontSize(11)
                     .fontWeight(FontWeight.Bold)
                     .fontColor('#FFFFFFFF')
-                    .opacity(this.completingId === task.id ? 1 : 0)
+                    .opacity(this.completingId === row.item.id ? 1 : 0)
                     .scale({
-                      x: this.completingId === task.id ? 1 : 0.3,
-                      y: this.completingId === task.id ? 1 : 0.3
+                      x: this.completingId === row.item.id ? 1 : 0.3,
+                      y: this.completingId === row.item.id ? 1 : 0.3
                     })
                     .animation({ duration: 500, curve: Curve.EaseOut })
                 }
-                .width(22)
+                .width(this.isSquare() ? 28 : 30)
                 .height(this.taskRowHeight())
-                .onClick(() => this.completeTask(task))
+                .accessibilityText(`完成 ${row.item.title}`)
+                .onClick(() => this.completeTask(row.item))
 
-                Text(task.title)
-                  .fontSize(12)
+                Text(row.item.title)
+                  .fontSize(this.isMini() ? 12 : 13)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.tc())
-                  .opacity(this.completingId === task.id ? 0 : 1)
+                  .opacity(this.completingId === row.item.id ? 0 : 1)
                   .animation({ duration: 600, curve: Curve.EaseOut })
                   .maxLines(this.isLarge() ? 2 : 1)
-                  .lineHeight(this.isLarge() ? 16 : 14)
+                  .lineHeight(this.isMini() ? 16 : 18)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
                   .layoutWeight(1)
                   .onClick(() => this.openApp())
 
-                if (task.hasReminder && !this.usesCompactVisual()) {
+                if (row.item.hasReminder && !this.usesCompactVisual()) {
                   SymbolGlyph($r('sys.symbol.bell'))
                     .fontSize(11)
                     .fontColor([this.tc()])
-                    .opacity(this.completingId === task.id ? 0 : 0.85)
+                    .opacity(this.completingId === row.item.id ? 0 : 0.85)
                     .animation({ duration: 600, curve: Curve.EaseOut })
+                    .onClick(() => this.openApp())
                 }
               }
               .width('100%')
@@ -257,40 +286,48 @@ struct WidgetCard {
                 left: this.isWide() ? 1 : 0,
                 right: this.isWide() ? 4 : 2
               })
-              .onClick(() => this.openApp())
             }
-          }, (task: CardTask) => task.id)
+          }).key((task: CardTask) => cardTaskRenderKey(task))
         }
         .layoutWeight(1)
         .width('100%')
         .scrollBar(BarState.Off)
         .edgeEffect(EdgeEffect.None)
+        .onSizeChange((_oldValue: SizeOptions, newValue: SizeOptions) => {
+          if (this.isSquare() && typeof newValue.height === 'number' &&
+            newValue.height > 0 && Math.abs(this.taskListHeight - newValue.height) > 0.5) {
+            this.taskListHeight = newValue.height;
+          }
+        })
       }
 
-      Row() {
-        Text(this.pendingLabel())
-          .fontSize(this.isWide() ? 8 : 9)
-          .fontColor(this.tc())
-          .opacity(0.62)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Blank()
+      if (!this.isMini()) {
+        Row() {
+          Text(this.pendingLabel())
+            .fontSize(this.isSquare() ? 10 : 11)
+            .fontColor(this.tc())
+            .opacity(0.86)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Blank()
+        }
+        .width('100%')
+        .height(this.isSquare() ? 12 : 16)
+        .padding({ left: 3, right: 3 })
+        .onClick(() => this.openApp())
       }
-      .width('100%')
-      .height(this.isWide() ? 12 : this.usesCompactVisual() ? 12 : 14)
-      .padding({ left: 4, right: 4 })
-      .onClick(() => this.openApp())
     }
     .width('100%')
     .height('100%')
     .padding({
-      left: this.isWide() ? 12 : 8,
-      right: this.isWide() ? 12 : 8,
-      top: this.isWide() ? 6 : this.usesCompactVisual() ? 8 : 10,
-      bottom: this.isWide() ? 5 : this.usesCompactVisual() ? 6 : 8
+      left: this.usesCompactVisual() ? 8 : 12,
+      right: this.usesCompactVisual() ? 8 : 12,
+      top: this.usesCompactVisual() ? 6 : 10,
+      bottom: this.usesCompactVisual() ? 6 : 10
     })
     .backgroundColor(backgroundColorFor(this.widgetBlurStyle, this.textColor))
     .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
     .border({ width: 0.6, color: borderColorFor(this.widgetBlurStyle, this.textColor) })
+    .borderRadius(24)
   }
 }

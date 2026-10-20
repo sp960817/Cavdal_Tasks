@@ -87,30 +87,17 @@ export class SyncService {
   }
 
   async saveAccount(serverUrl: string, username: string, password: string, calendar: CalendarSource): Promise<void> {
-    const previous = await this.settings.load();
     await CredentialStore.savePassword(password);
-    await this.settings.save({
-      serverUrl,
-      username,
-      calendarHref: calendar.href,
-      calendarName: calendar.displayName,
-      lastSyncAt: 0,
-      widgetBlurStyle: previous.widgetBlurStyle,
-      handednessEnabled: previous.handednessEnabled
-    });
+    await this.settings.saveAccount(serverUrl, username, calendar.href, calendar.displayName);
   }
 
   async saveWidgetBlurStyle(style: WidgetBlurStyle): Promise<void> {
-    const settings = await this.settings.load();
-    settings.widgetBlurStyle = style;
-    await this.settings.save(settings);
+    await this.settings.saveWidgetBlurStyle(style);
     await this.refreshWidgets();
   }
 
   async saveHandedness(enabled: boolean): Promise<void> {
-    const settings = await this.settings.load();
-    settings.handednessEnabled = enabled;
-    await this.settings.save(settings);
+    await this.settings.saveHandedness(enabled);
   }
 
   async discover(serverUrl: string, username: string, password: string): Promise<CalendarSource[]> {
@@ -177,7 +164,7 @@ export class SyncService {
     }
     await this.repository.saveRemoteSnapshot(settings.calendarHref, tasks);
     settings.lastSyncAt = Date.now();
-    await this.settings.save(settings);
+    await this.settings.saveLastSyncAt(settings.lastSyncAt);
     await this.refreshReminders();
     await this.refreshWidgets();
     const summary = `已同步 ${tasks.length} 个待办`;
@@ -354,6 +341,7 @@ export class SyncService {
       await this.repository.enqueue(this.operationFor(updated));
     }
     await this.refreshReminders();
+    await this.refreshWidgets();
   }
 
   private async flushQueue(client: CalDavClient): Promise<number> {

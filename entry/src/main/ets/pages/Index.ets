@@ -11,7 +11,7 @@ import { SymbolGlyphModifier, curves, uiMaterial } from '@kit.ArkUI';
 import { motion } from '@kit.MultimodalAwarenessKit';
 import { TaskCards } from '../components/home/TaskCards';
 import { WidgetAppearanceCard, widgetBlurLabel } from '../components/settings/WidgetAppearanceCard';
-import { calculateHomeLayout, HomeLayoutMetrics } from '../utils/HomeLayout';
+import { taskSheetOptions } from '../components/common/MaterialStyles';
 
 @Entry
 @Component
@@ -51,6 +51,8 @@ struct Index {
   @State homeViewportHeight: number = 0;
   @State searchQuery: string = '';
   @State editingTask: TodoTask | null = null;
+  @State editingTitle: string = '';
+  @State editingDescription: string = '';
   @State handednessEnabled: boolean = false;
   @State fabAlignRules: AlignRuleOption = {
     right: { anchor: '__container__', align: HorizontalAlign.End },
@@ -68,6 +70,7 @@ struct Index {
   private hdsController: HdsTabsController = new HdsTabsController();
   private tabsController: TabsController = new TabsController();
   private settingsPathStack: NavPathStack = new NavPathStack();
+  private widgetStyleRequestVersion: number = 0;
   private handleHoldingHandChange: Callback<motion.HoldingHandStatus> = (status: motion.HoldingHandStatus) => {
     this.getUIContext().animateTo({ curve: curves.interpolatingSpring(0, 1, 288, 30) }, () => {
       if (canIUse('SystemCapability.MultimodalAwareness.Motion')) {
@@ -382,9 +385,8 @@ struct Index {
     this.uiContext.showDatePickerDialog({
       selected: this.selectedDueDate,
       onAccept: (value: DatePickerResult) => {
-        this.selectedDueDate.setFullYear(value.year, value.month, value.day);
+        this.selectedDueDate = new Date(value.year, value.month, value.day);
         this.hasDue = true;
-        this.reminderOption = '无';
       }
     });
   }
@@ -397,7 +399,6 @@ struct Index {
         this.selectedDueHour = value.hour;
         this.selectedDueMinute = value.minute;
         this.hasDue = true;
-        this.reminderOption = '立刻';
       }
     });
   }
@@ -457,6 +458,8 @@ struct Index {
   }
 
   private openEditTask(task: TodoTask): void {
+    this.editingTitle = task.title;
+    this.editingDescription = task.description;
     this.editingTask = {
       id: task.id,
       uid: task.uid,
@@ -501,13 +504,27 @@ struct Index {
   }
 
   private async updateWidgetBlurStyle(style: WidgetBlurStyle): Promise<void> {
+    const requestVersion = ++this.widgetStyleRequestVersion;
     const previous = this.widgetBlurStyle;
     this.widgetBlurStyle = style;
     try {
       await this.syncService.saveWidgetBlurStyle(style);
-      this.statusText = `卡片背景已设为${widgetBlurLabel(style)}`;
+      if (requestVersion === this.widgetStyleRequestVersion) {
+        this.statusText = `卡片背景已设为${widgetBlurLabel(style)}`;
+      }
     } catch (err) {
-      this.widgetBlurStyle = previous;
+      if (requestVersion !== this.widgetStyleRequestVersion) {
+        return;
+      }
+      let savedStyle = previous;
+      try {
+        savedStyle = (await this.syncService.loadSettings()).widgetBlurStyle;
+      } catch (_loadErr) {
+      }
+      if (requestVersion !== this.widgetStyleRequestVersion) {
+        return;
+      }
+      this.widgetBlurStyle = savedStyle;
       this.statusText = `卡片设置失败：${JSON.stringify(err)}`;
       this.safeShowToast('卡片设置失败');
     }
@@ -549,7 +566,7 @@ struct Index {
     .padding(14)
     .backgroundColor($r('app.color.surface'))
     .border({ width: 0.5, color: $r('app.color.divider') })
-    .borderRadius(16)
+    .borderRadius(22)
     .onClick(() => {
       this.calendars = [];
       this.selectedCalendarIndex = 0;
@@ -560,6 +577,15 @@ struct Index {
   @Builder
   private SetupView() {
     Column({ space: 18 }) {
+      if (!this.configured) {
+        Column({ space: 10 }) {
+          Image($r('app.media.material_planner')).width(156).height(146).objectFit(ImageFit.Contain)
+            .accessibilityLevel('no')
+          Text('欢迎来到拾序').fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+          Text('连接你的任务清单，让每一天井然有序。')
+            .fontSize(13).fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
+        }.width('100%').padding({ top: 12, bottom: 12 })
+      }
       Column({ space: 12 }) {
         Text('连接信息')
           .fontSize(14)
@@ -590,7 +616,7 @@ struct Index {
       .padding(14)
       .backgroundColor($r('app.color.surface'))
       .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(16)
+      .borderRadius(22)
 
       Button(this.testingConnection ? '正在连接' : '测试连接')
         .height(46)
@@ -705,18 +731,18 @@ struct Index {
   }
 
   private filteredActiveTasks(): TodoTask[] {
-    if (this.searchQuery.length === 0) {
+    if (this.searchQuery.trim().length === 0) {
       return this.tasks;
     }
-    const q = this.searchQuery.toLowerCase();
+    const q = this.searchQuery.trim().toLowerCase();
     return this.tasks.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
   }
 
   private filteredCompletedTasks(): TodoTask[] {
-    if (this.searchQuery.length === 0) {
+    if (this.searchQuery.trim().length === 0) {
       return this.completed;
     }
-    const q = this.searchQuery.toLowerCase();
+    const q = this.searchQuery.trim().toLowerCase();
     return this.completed.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
   }
 
@@ -735,15 +761,39 @@ struct Index {
     }).length;
   }
 
-  private homeLayout(): HomeLayoutMetrics {
-    return calculateHomeLayout(this.homeViewportHeight, this.filteredActiveTasks().length,
-      this.pendingTaskCount());
+  private dateHeading(): string {
+    const now = new Date();
+    const weekdays: string[] = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    return `${now.getMonth() + 1}月${now.getDate()}日 · ${weekdays[now.getDay()]}`;
+  }
+
+  @Builder
+  private SectionLabel(title: string) {
+    Text(title)
+      .fontSize(12)
+      .fontWeight(FontWeight.Medium)
+      .fontColor($r('app.color.text_secondary'))
+      .width('100%')
+      .padding({ left: 6, top: 8, bottom: 2 })
   }
 
   @Builder
   private SettingsView() {
     Column({ space: 12 }) {
+      Row({ space: 14 }) {
+        Image($r('app.media.brand_icon')).width(64).height(64).objectFit(ImageFit.Contain)
+          .accessibilityLevel('no')
+        Column({ space: 4 }) {
+          Text('拾序').fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+          Text('让每一天，井然有序').fontSize(13).fontColor($r('app.color.text_secondary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      }
+      .width('100%').padding(18)
+      .linearGradient({ angle: 120, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
+      .borderRadius(26)
+      this.SectionLabel('同步与账号')
       this.ServerSettingsMenu()
+      this.SectionLabel('外观与交互')
       WidgetAppearanceCard({
         selectedStyle: this.widgetBlurStyle,
         onStyleChange: (style: WidgetBlurStyle): void => {
@@ -771,8 +821,9 @@ struct Index {
       .padding(14)
       .backgroundColor($r('app.color.surface'))
       .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(16)
+      .borderRadius(22)
 
+      this.SectionLabel('数据管理')
       Column() {
         Row({ space: 12 }) {
           SymbolGlyph($r('sys.symbol.arrow_clockwise'))
@@ -809,13 +860,26 @@ struct Index {
         }
         .width('100%')
         .height(52)
-        .onClick(() => this.clearLocal())
+        .onClick(() => {
+          this.uiContext.getPromptAction().showDialog({
+            title: '清空本地缓存？',
+            message: '本机待办缓存将被移除。请先同步尚未上传的更改。',
+            buttons: [
+              { text: '取消', color: $r('app.color.accent') },
+              { text: '清空缓存', color: $r('app.color.danger_text') }
+            ]
+          }).then((result) => {
+            if (result.index === 1) {
+              this.clearLocal();
+            }
+          }).catch(() => {});
+        })
       }
       .width('100%')
       .padding({ left: 14, right: 14 })
       .backgroundColor($r('app.color.surface'))
       .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(16)
+      .borderRadius(22)
     }
     .padding({ left: 20, right: 20, top: 8, bottom: 120 })
     .width('100%')
@@ -823,80 +887,77 @@ struct Index {
 
   @Builder
   private HomeTaskSummary() {
-    Column({ space: 5 }) {
-      Row() {
-        Row({ space: 4 }) {
-          Text(`${this.todayTaskCount()}`)
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
-          Text('今日')
-            .fontSize(11)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-
-        Divider()
-          .vertical(true)
-          .height(14)
-          .color($r('app.color.divider'))
-
-        Row({ space: 4 }) {
-          Text(`${Math.max(0, this.filteredActiveTasks().length - this.todayTaskCount())}`)
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
-          Text('其余')
-            .fontSize(11)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-
-        Divider()
-          .vertical(true)
-          .height(14)
-          .color($r('app.color.divider'))
-
-        Row({ space: 4 }) {
-          Text(`${this.pendingTaskCount()}`)
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
-          Text('待同步')
-            .fontSize(11)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .layoutWeight(1)
-        .justifyContent(FlexAlign.Center)
-      }
-      .width('100%')
-
-      Text(this.statusText)
-        .fontSize(10)
-        .fontColor($r('app.color.text_tertiary'))
-        .width('100%')
-        .textAlign(TextAlign.Center)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+    Row() {
+      Column({ space: 2 }) {
+        Text(`${this.todayTaskCount()}`)
+          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+        Text('今日待办').fontSize(11).fontColor($r('app.color.text_secondary'))
+      }.layoutWeight(1)
+      Divider().vertical(true).height(22).color($r('app.color.divider'))
+      Column({ space: 2 }) {
+        Text(`${this.filteredActiveTasks().length}`)
+          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+        Text('进行中').fontSize(11).fontColor($r('app.color.text_secondary'))
+      }.layoutWeight(1)
+      Divider().vertical(true).height(22).color($r('app.color.divider'))
+      Column({ space: 2 }) {
+        Text(`${this.completed.length}`)
+          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+        Text('已完成').fontSize(11).fontColor($r('app.color.text_secondary'))
+      }.layoutWeight(1)
     }
     .width('100%')
-    .height(48)
-    .padding({ left: 10, right: 10, top: 6, bottom: 5 })
-    .backgroundColor($r('app.color.surface_subtle'))
-    .border({ width: 0.5, color: $r('app.color.divider') })
-    .borderRadius(12)
+    .height(64)
+    .padding({ left: 12, right: 12 })
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(22)
+  }
+
+  @Builder
+  private HomeHero() {
+    Row({ space: 4 }) {
+      Column({ space: 7 }) {
+        Text('给生活，留一点从容')
+          .fontSize(19).fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+          .maxLines(2)
+        Text(this.tasks.length === 0 ? '把想做的事，慢慢变成做过的事。' : '从一件小事开始，让今天井然有序。')
+          .fontSize(12).lineHeight(19)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(2)
+        Row({ space: 5 }) {
+          Column().width(5).height(5).borderRadius(3)
+            .backgroundColor(this.pendingTaskCount() > 0 ? $r('app.color.warning_text') : $r('app.color.success'))
+          Text(this.statusText)
+            .fontSize(10).fontColor($r('app.color.text_secondary'))
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        }.width('100%').margin({ top: 3 })
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      Image($r('app.media.material_planner'))
+        .width(110).height(116).objectFit(ImageFit.Contain)
+        .accessibilityLevel('no')
+    }
+    .width('100%').height(140)
+    .padding({ left: 20, right: 8, top: 12, bottom: 12 })
+    .linearGradient({ angle: 120, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
+    .border({ width: 1, color: $r('app.color.glass_edge') })
+    .borderRadius(28)
   }
 
   @Builder
   private HomeView() {
-    Column({ space: 14 }) {
+    Column({ space: 12 }) {
+      if (!this.showSearch && (this.homeViewportHeight === 0 || this.homeViewportHeight >= 520)) {
+        this.HomeHero()
+      }
+      if (!this.showSearch && (this.homeViewportHeight === 0 || this.homeViewportHeight >= 420)) {
+        this.HomeTaskSummary()
+      }
       TaskCards({
         activeTasks: this.filteredActiveTasks(),
         completedTasks: this.filteredCompletedTasks(),
         completedTotalCount: this.completed.length,
-        activeHeight: this.homeLayout().activeHeight,
+        searchActive: this.searchQuery.trim().length > 0,
         onToggleTask: (task: TodoTask, done: boolean): void => {
           this.toggleTask(task, done);
         },
@@ -910,298 +971,163 @@ struct Index {
           this.openAddSheet();
         }
       })
-
-      this.HomeTaskSummary()
+      .layoutWeight(1)
     }
-    .padding({ left: 20, right: 20, top: 8, bottom: 132 })
+    .padding({ left: 20, right: 20, top: 8, bottom: 100 })
     .width('100%')
     .height('100%')
+  }
+
+  private scheduleLabel(target: string): string {
+    if (target === 'date') return this.hasDue ? this.dateOnlyPreview() : '添加日期';
+    if (target === 'time') return this.hasDue ? this.timeOnlyPreview() : '设置时间';
+    if (target === 'reminder') return this.reminderOption === '无' ? '提醒' : this.reminderOption;
+    return this.repeatOption === '无' ? '重复' : this.repeatOption;
+  }
+
+  private scheduleSelected(target: string): boolean {
+    if (target === 'reminder') return this.reminderOption !== '无';
+    if (target === 'repeat') return this.repeatOption !== '无';
+    return this.hasDue;
+  }
+
+  @Builder
+  private ScheduleButton(icon: Resource, target: string) {
+    Button() {
+      Row({ space: 8 }) {
+        SymbolGlyph(icon).fontSize(17)
+          .fontColor([this.scheduleSelected(target) ? $r('app.color.accent') : $r('app.color.text_secondary')])
+        Text(this.scheduleLabel(target)).fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1).textAlign(TextAlign.Center)
+          .fontColor(this.scheduleSelected(target) ? $r('app.color.accent') : $r('app.color.text_secondary'))
+      }.width('100%').justifyContent(FlexAlign.Center)
+    }
+    .type(ButtonType.Normal).height(46).layoutWeight(1)
+    .padding({ left: 14, right: 14 })
+    .backgroundColor(this.scheduleSelected(target) ? $r('app.color.accent_soft') : $r('app.color.surface_input'))
+    .borderRadius(22).onClick(() => {
+      if (target === 'date' || (target === 'time' && !this.hasDue)) {
+        this.showDatePicker();
+      } else if (target === 'time') {
+        this.showTimePicker();
+      } else {
+        this.openScheduleOptions(target);
+      }
+    })
+  }
+
+  private openScheduleOptions(target: string): void {
+    if (!this.hasDue) {
+      this.safeShowToast('请先选择待办日期');
+      this.showDatePicker();
+      return;
+    }
+    this.settingPanel = this.settingPanel === target ? '' : target;
+  }
+
+  @Builder
+  private TaskEditorFields(editing: boolean) {
+    TextInput({ placeholder: '想做些什么？', text: editing ? this.editingTitle : this.newTitle })
+      .onChange((value: string) => {
+        if (editing) {
+          this.editingTitle = value;
+        } else {
+          this.newTitle = value;
+        }
+      })
+      .height(60).fontSize(20).fontWeight(FontWeight.Medium)
+      .fontColor($r('app.color.text_primary'))
+      .placeholderColor($r('app.color.text_tertiary'))
+      .backgroundColor($r('app.color.surface_input')).borderRadius(20)
+    TextArea({ placeholder: '记下一点细节，让行动更轻松（选填）',
+      text: editing ? this.editingDescription : this.newDescription })
+      .onChange((value: string) => {
+        if (editing) {
+          this.editingDescription = value;
+        } else {
+          this.newDescription = value;
+        }
+      })
+      .height(96).fontSize(15).fontColor($r('app.color.text_primary'))
+      .placeholderColor($r('app.color.text_tertiary'))
+      .backgroundColor($r('app.color.surface_input')).borderRadius(20)
+    Row() {
+      Text('时间安排').fontSize(12).fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_secondary')).layoutWeight(1)
+      if (this.hasDue) {
+        Button('清除日期').fontSize(12).height(32)
+          .fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)
+          .onClick(() => {
+            this.hasDue = false;
+            this.reminderOption = '无';
+            this.repeatOption = '无';
+            this.settingPanel = '';
+          })
+      }
+    }.width('100%').height(32)
+    Row({ space: 10 }) {
+      this.ScheduleButton($r('sys.symbol.calendar'), 'date')
+      this.ScheduleButton($r('sys.symbol.clock'), 'time')
+    }.width('100%')
+    Row({ space: 10 }) {
+      this.ScheduleButton($r('sys.symbol.bell'), 'reminder')
+      this.ScheduleButton($r('sys.symbol.repeat'), 'repeat')
+    }.width('100%')
+    if (this.settingPanel === 'reminder') {
+      this.OptionChips(this.reminderOptions(), 'reminder')
+    }
+    if (this.settingPanel === 'repeat') {
+      this.OptionChips(this.repeatOptions(), 'repeat')
+    }
+  }
+
+  @Builder
+  private EditorHeader(editing: boolean) {
+    Row({ space: 12 }) {
+      Button() {
+        SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([$r('app.color.text_secondary')])
+      }
+      .type(ButtonType.Circle).width(40).height(40)
+      .backgroundColor($r('app.color.surface_input')).accessibilityText('取消编辑')
+      .onClick(() => {
+        if (editing) {
+          this.showEditSheet = false;
+        } else {
+          this.showAddSheet = false;
+        }
+      })
+      Text(editing ? '编辑待办' : '拾起一件小事')
+        .fontSize(21).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).layoutWeight(1)
+      Button(editing ? '保存' : '添加')
+        .height(40).padding({ left: 20, right: 20 }).fontSize(14).fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.on_accent')).backgroundColor($r('app.color.accent'))
+        .enabled((editing ? this.editingTitle : this.newTitle).trim().length > 0)
+        .onClick(() => {
+          if (editing) {
+            this.saveEdit();
+          } else {
+            this.addTask();
+          }
+        })
+    }.width('100%').margin({ bottom: 8 })
   }
 
   @Builder
   private AddTaskSheetContent() {
     Column({ space: 12 }) {
-      Row() {
-        Column({ space: 2 }) {
-          Text('添加待办')
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-          if (this.hasDue) {
-            Text(this.reminderOption !== '无' ? this.timeOnlyPreview() : this.dateOnlyPreview())
-              .fontSize(13)
-              .fontColor($r('app.color.accent'))
-          }
-        }
-        .layoutWeight(1)
-        .alignItems(HorizontalAlign.Start)
-
-        Button('添加')
-          .height(38)
-          .padding({ left: 18, right: 18 })
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.on_accent'))
-          .backgroundColor($r('app.color.accent'))
-          .borderRadius(19)
-          .onClick(() => this.addTask())
-      }
-      .width('100%')
-
-      TextInput({ placeholder: '待办标题', text: this.newTitle })
-        .onChange((value: string) => this.newTitle = value)
-        .height(54)
-        .fontSize(18)
-        .backgroundColor($r('app.color.surface_input'))
-        .borderRadius(16)
-
-      TextInput({ placeholder: '说明，可留空', text: this.newDescription })
-        .onChange((value: string) => this.newDescription = value)
-        .height(54)
-        .fontSize(16)
-        .backgroundColor($r('app.color.surface_input'))
-        .borderRadius(16)
-
-      Row({ space: 10 }) {
-        Row({ space: 10 }) {
-          Button() {
-            SymbolGlyph($r('sys.symbol.calendar'))
-              .fontSize(21)
-              .fontWeight(FontWeight.Medium)
-              .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
-          }
-          .type(ButtonType.Normal)
-          .width(44)
-          .height(44)
-          .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-          .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(22)
-          .onClick(() => this.showDatePicker())
-
-          if (this.hasDue) {
-            Button() {
-              SymbolGlyph($r('sys.symbol.clock'))
-                .fontSize(20)
-                .fontWeight(FontWeight.Medium)
-                .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-            }
-            .type(ButtonType.Normal)
-            .width(44)
-            .height(44)
-            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-            .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .onClick(() => this.showTimePicker())
-          }
-
-          Button() {
-            SymbolGlyph($r('sys.symbol.bell'))
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-              .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-          }
-          .type(ButtonType.Normal)
-          .width(44)
-          .height(44)
-          .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-          .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(22)
-          .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
-
-          Button() {
-            SymbolGlyph($r('sys.symbol.repeat'))
-              .fontSize(20)
-              .fontWeight(FontWeight.Medium)
-              .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-          }
-          .type(ButtonType.Normal)
-          .width(44)
-          .height(44)
-          .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-          .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-          .borderRadius(22)
-          .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
-        }
-
-        Blank()
-          .layoutWeight(1)
-
-        Button('取消')
-          .height(44)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .padding({ left: 18, right: 18 })
-          .fontColor($r('app.color.text_secondary'))
-          .backgroundColor($r('app.color.surface_translucent'))
-          .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-          .border({ width: 1, color: $r('app.color.bar_glass_edge') })
-          .borderRadius(22)
-          .onClick(() => {
-            this.showAddSheet = false;
-          })
-      }
-        .width('100%')
-        .margin({ top: 4 })
-
-      if (this.settingPanel === 'reminder') {
-        this.OptionChips(this.reminderOptions(), 'reminder')
-      }
-      if (this.settingPanel === 'repeat') {
-        this.OptionChips(this.repeatOptions(), 'repeat')
-      }
+      this.EditorHeader(false)
+      this.TaskEditorFields(false)
     }
-    .width('100%')
-    .padding({ left: 20, right: 20, top: 20, bottom: 26 })
+    .width('100%').padding({ left: 22, right: 22, top: 22, bottom: 32 })
   }
 
   @Builder
   private EditTaskSheetContent() {
-    if (this.editingTask !== null) {
-      Column({ space: 12 }) {
-        Row() {
-          Text('编辑待办')
-            .fontSize(22)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .layoutWeight(1)
-          Button('完成')
-            .height(38)
-            .padding({ left: 18, right: 18 })
-            .fontSize(15)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.on_accent'))
-            .backgroundColor($r('app.color.accent'))
-            .borderRadius(19)
-            .onClick(() => {
-              this.saveEdit();
-            })
-        }
-        .width('100%')
-
-        TextInput({ placeholder: '待办标题', text: this.editingTask!.title })
-          .onChange((value: string) => {
-            this.updateEditingTitle(value);
-          })
-          .height(54)
-          .fontSize(18)
-          .backgroundColor($r('app.color.surface_input'))
-          .borderRadius(16)
-
-        TextInput({ placeholder: '说明，可留空', text: this.editingTask!.description })
-          .onChange((value: string) => {
-            this.updateEditingDesc(value);
-          })
-          .height(54)
-          .fontSize(16)
-          .backgroundColor($r('app.color.surface_input'))
-          .borderRadius(16)
-
-        Row({ space: 10 }) {
-          Row({ space: 10 }) {
-            Button() {
-              SymbolGlyph($r('sys.symbol.calendar'))
-                .fontSize(21)
-                .fontWeight(FontWeight.Medium)
-                .fontColor([this.hasDue ? $r('app.color.on_accent') : $r('app.color.accent')])
-            }
-            .type(ButtonType.Normal)
-            .width(44)
-            .height(44)
-            .backgroundColor(this.hasDue ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-            .border({ width: 1, color: this.hasDue ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .onClick(() => this.showDatePicker())
-
-            if (this.hasDue) {
-              Button() {
-                SymbolGlyph($r('sys.symbol.clock'))
-                  .fontSize(20)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-              }
-              .type(ButtonType.Normal)
-              .width(44)
-              .height(44)
-              .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-              .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-              .borderRadius(22)
-              .onClick(() => this.showTimePicker())
-            }
-
-            Button() {
-              SymbolGlyph($r('sys.symbol.bell'))
-                .fontSize(20)
-                .fontWeight(FontWeight.Medium)
-                .fontColor([this.reminderOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-            }
-            .type(ButtonType.Normal)
-            .width(44)
-            .height(44)
-            .backgroundColor(this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-            .border({ width: 1, color: this.reminderOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .onClick(() => this.settingPanel = this.settingPanel === 'reminder' ? '' : 'reminder')
-
-            Button() {
-              SymbolGlyph($r('sys.symbol.repeat'))
-                .fontSize(20)
-                .fontWeight(FontWeight.Medium)
-                .fontColor([this.repeatOption !== '无' ? $r('app.color.on_accent') : $r('app.color.accent')])
-            }
-            .type(ButtonType.Normal)
-            .width(44)
-            .height(44)
-            .backgroundColor(this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.surface_translucent'))
-            .border({ width: 1, color: this.repeatOption !== '无' ? $r('app.color.accent') : $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .onClick(() => this.settingPanel = this.settingPanel === 'repeat' ? '' : 'repeat')
-          }
-          Blank().layoutWeight(1)
-        }
-
-        Row({ space: 10 }) {
-          Blank()
-            .layoutWeight(1)
-          Button('取消')
-            .height(44)
-            .fontSize(16)
-            .fontWeight(FontWeight.Medium)
-            .padding({ left: 18, right: 18 })
-            .fontColor($r('app.color.text_secondary'))
-            .backgroundColor($r('app.color.surface_translucent'))
-            .backgroundBlurStyle(BlurStyle.COMPONENT_THIN)
-            .border({ width: 1, color: $r('app.color.bar_glass_edge') })
-            .borderRadius(22)
-            .onClick(() => {
-              this.showEditSheet = false;
-              this.editingTask = null;
-            })
-        }
-        .width('100%')
-        .margin({ top: 4 })
-
-        if (this.settingPanel === 'reminder') {
-          this.OptionChips(this.reminderOptions(), 'reminder')
-        }
-        if (this.settingPanel === 'repeat') {
-          this.OptionChips(this.repeatOptions(), 'repeat')
-        }
-      }
-      .width('100%')
-      .padding({ left: 20, right: 20, top: 20, bottom: 26 })
+    Column({ space: 12 }) {
+      this.EditorHeader(true)
+      this.TaskEditorFields(true)
     }
-  }
-
-  private updateEditingTitle(value: string): void {
-    if (this.editingTask !== null) {
-      this.editingTask.title = value;
-    }
-  }
-
-  private updateEditingDesc(value: string): void {
-    if (this.editingTask !== null) {
-      this.editingTask.description = value;
-    }
+    .width('100%').padding({ left: 22, right: 22, top: 22, bottom: 32 })
   }
 
   private loadTaskState(task: TodoTask): void {
@@ -1227,13 +1153,13 @@ struct Index {
     if (this.editingTask === null) {
       return;
     }
-    if (this.editingTask.title.trim().length === 0) {
+    if (this.editingTitle.trim().length === 0) {
       this.safeShowToast('请输入待办标题');
       return;
     }
     const taskId = this.editingTask.id;
-    const title = this.editingTask.title.trim();
-    const description = this.editingTask.description.trim();
+    const title = this.editingTitle.trim();
+    const description = this.editingDescription.trim();
     const due = this.hasDue ? this.formatDueForCalDav() : '';
     const reminder = this.hasDue ? this.reminderOption : '无';
     const repeat = this.hasDue ? this.repeatOption : '无';
@@ -1287,7 +1213,7 @@ struct Index {
             .fontSize(13)
             .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
             .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
-            .borderRadius(16)
+            .borderRadius(22)
             .height(32)
             .padding({ left: 12, right: 12 })
             .onClick(() => {
@@ -1356,11 +1282,12 @@ struct Index {
   private ConfiguredView() {
     Column() {
       Row() {
-        Text(this.selectedTabIndex === 1 ? '设置' : '待办事项')
-          .fontSize(26)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
+        Column({ space: 3 }) {
+          Text(this.selectedTabIndex === 1 ? '设置' : '拾序')
+            .fontSize(30).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+          Text(this.selectedTabIndex === 1 ? '按你的习惯，安排每一天' : this.dateHeading())
+            .fontSize(12).fontColor($r('app.color.text_secondary'))
+        }.alignItems(HorizontalAlign.Start).layoutWeight(1)
 
         if (this.selectedTabIndex === 0) {
           Button() {
@@ -1375,7 +1302,8 @@ struct Index {
           .height(42)
           .backgroundColor($r('app.color.surface'))
           .border({ width: 0.5, color: $r('app.color.divider') })
-          .borderRadius(14)
+          .borderRadius(21)
+          .accessibilityText('搜索待办')
           .onClick(() => {
             if (this.searchQuery.length > 0) {
               this.searchQuery = '';
@@ -1411,7 +1339,7 @@ struct Index {
           barBottomMargin: 24,
           adaptToHandedness: true,
           systemMaterial: new uiMaterial.ImmersiveMaterial({
-            colorInvert: true,
+            colorInvert: false,
             interactive: true,
             lightEffect: { color: $r('app.color.accent') }
           })
@@ -1515,7 +1443,8 @@ struct Index {
           .scale({ x: this.showAddSheet ? 0.94 : 1, y: this.showAddSheet ? 0.94 : 1 })
           .animation({ duration: 160, curve: Curve.EaseOut })
           .alignRules(this.fabAlignRules)
-          .margin({ left: 22, right: 22, bottom: 96 })
+          .accessibilityText('添加待办')
+          .margin({ left: 24, right: 24, bottom: 160 })
           .onClick(() => this.openAddSheet())
         }
       }
@@ -1527,12 +1456,9 @@ struct Index {
           top: { anchor: '__container__', align: VerticalAlign.Top },
           left: { anchor: '__container__', align: HorizontalAlign.Start }
         })
-        .bindSheet($$this.showAddSheet, this.AddTaskSheetContent(), {
-          detents: [SheetSize.FIT_CONTENT, SheetSize.LARGE],
-          backgroundColor: $r('app.color.surface_translucent'),
-          blurStyle: BlurStyle.COMPONENT_THIN,
-          showClose: false
-        })
+        .bindSheet($$this.showAddSheet, this.AddTaskSheetContent(), taskSheetOptions())
+
+
 
       Column()
         .width(0)
@@ -1541,15 +1467,9 @@ struct Index {
           top: { anchor: '__container__', align: VerticalAlign.Top },
           left: { anchor: '__container__', align: HorizontalAlign.Start }
         })
-        .bindSheet($$this.showEditSheet, this.EditTaskSheetContent(), {
-          detents: [SheetSize.FIT_CONTENT, SheetSize.LARGE],
-          backgroundColor: $r('app.color.surface_translucent'),
-          blurStyle: BlurStyle.COMPONENT_THIN,
-          showClose: false,
-          onDisappear: () => {
-            this.editingTask = null;
-          }
-        })
+        .bindSheet($$this.showEditSheet, this.EditTaskSheetContent(), taskSheetOptions())
+
+
     }
     .height('100%')
     .width('100%')

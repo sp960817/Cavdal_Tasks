@@ -33,6 +33,8 @@ function errorText(err: Object): string {
 }
 
 export class WidgetUpdater {
+  private static updateQueue: Promise<void> = Promise.resolve();
+
   private static async formIds(context: common.Context): Promise<string[]> {
     try {
       const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
@@ -116,7 +118,15 @@ export class WidgetUpdater {
     return storedIds.map((formId: string) => ({ formId, textColor } as FormTarget));
   }
 
-  static async updateAllForms(context: common.Context): Promise<void> {
+  static updateAllForms(context: common.Context): Promise<void> {
+    // Read the current settings when each queued update starts. An older
+    // payload must finish before a newer selection can reach the same form.
+    const update = WidgetUpdater.updateQueue.then(() => WidgetUpdater.performUpdate(context));
+    WidgetUpdater.updateQueue = update.catch(() => {});
+    return update;
+  }
+
+  private static async performUpdate(context: common.Context): Promise<void> {
     const settings = await new SettingsStore(context).load();
     const payload = await new TaskRepository(context).widgetPayload(settings.lastSyncAt);
     const targets = await WidgetUpdater.runningForms(context);
