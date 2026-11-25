@@ -1,3 +1,4 @@
+import { widgetMaterialColor, widgetMaterialBlur } from '../../widget/WidgetMaterial';
 import { CatSnack } from '../common/CatSnack';
 import { WidgetBlurStyle } from '../../model/TaskModels';
 
@@ -8,13 +9,6 @@ export function widgetBlurLabel(style: WidgetBlurStyle): string {
   return '磨砂';
 }
 
-function previewBlurStyle(style: WidgetBlurStyle): BlurStyle {
-  if (style === 'thin') return BlurStyle.COMPONENT_ULTRA_THIN;
-  if (style === 'regular') return BlurStyle.COMPONENT_REGULAR;
-  if (style === 'thick') return BlurStyle.COMPONENT_THICK;
-  return BlurStyle.NONE;
-}
-
 @Component
 export struct WidgetAppearanceCard {
   @Prop selectedStyle: WidgetBlurStyle = 'thin';
@@ -22,7 +16,7 @@ export struct WidgetAppearanceCard {
   private styles: WidgetBlurStyle[] = ['none', 'thin', 'regular', 'thick'];
 
   private styleDescription(): string {
-    if (this.selectedStyle === 'none') return '让壁纸自然透过，保留轻盈文字。';
+    if (this.selectedStyle === 'none') return '支持透明背板时，卡片会直接透出桌面壁纸。';
     if (this.selectedStyle === 'thin') return '薄雾般的背景，让文字与壁纸都清晰。';
     if (this.selectedStyle === 'thick') return '更柔和的厚实背景，适合色彩丰富的壁纸。';
     return '平衡通透与对比，专注眼前的每件小事。';
@@ -38,9 +32,8 @@ export struct WidgetAppearanceCard {
       .justifyContent(FlexAlign.Center)
       .width('78%')
       .height(48)
-      .backgroundColor(style === 'none' ? Color.Transparent :
-        style === 'thick' ? $r('app.color.surface') : $r('app.color.glass_fill'))
-      .backgroundBlurStyle(previewBlurStyle(style))
+      .backgroundColor(widgetMaterialColor(style))
+      .backgroundBlurStyle(widgetMaterialBlur(style))
       .borderRadius(10)
     }
     .width('100%')

@@ -19,7 +19,7 @@
       "updateDuration": 1,
       "renderingMode": "fullColor",
       "transparencyEnabled": true,
-      "enableBlurBackground": true,
+      "enableBlurBackground": false,
       "resizable": true,
       "groupId": "1"
     }

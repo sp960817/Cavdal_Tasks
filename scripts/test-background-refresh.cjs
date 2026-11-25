@@ -124,12 +124,13 @@ test('background deadline leaves unattempted writes in the persistent queue', as
 
 function formFixture({ registrationFails = false } = {}) {
   const events = [];
+  const updates = [];
   const FormAbility = loader({
     '@kit.FormKit': {
       FormExtensionAbility: class {},
       formInfo: { FormParam: { HOST_BG_INVERSE_COLOR_KEY: 'color', DIMENSION_KEY: 'dimension' } },
       formBindingData: { createFormBindingData: data => data },
-      formProvider: { async updateForm(id, data) { events.push(`update:${id}:${data.pendingCount}`); } }
+      formProvider: { async updateForm(id, data) { updates.push({ id, data }); events.push(`update:${id}:${data.pendingCount}`); } }
     },
     '../data/TaskRepository': { TaskRepository: class {
       async widgetPayload() { return { tasks: [], pendingCount: 3, lastSyncText: 'cached' }; }
@@ -143,14 +144,29 @@ function formFixture({ registrationFails = false } = {}) {
       async registerForm() {
         if (registrationFails) throw new Error('registry unavailable');
         events.push('register');
-      },
-      async savedTextColor() { return '#80000000'; }
+      }
     } }
   })('entryformability/EntryFormAbility.ets').default;
   const form = new FormAbility();
   form.context = { getApplicationContext() { return {}; } };
-  return { form, events };
+  return { form, events, updates };
 }
+
+test('card colors belong to each launcher instance and survive task-only refreshes', async () => {
+  const { form, updates } = formFixture();
+  const first = form.onAddForm({ parameters: { formId: 'first', dimension: 2 } });
+  assert.equal(first.hostTextColor, '');
+  await turn();
+  form.onUpdateForm('first', { color: { mTextColor: '#80FFFFFF' } });
+  form.onUpdateForm('second', { color: '#112233' });
+  await turn();
+  assert.deepEqual(updates.slice(-2).map(({ id, data }) => [id, data.hostTextColor]),
+    [['first', '#FFFFFF'], ['second', '#112233']]);
+  form.onUpdateForm('first');
+  form.onUpdateForm('second', { color: 'invalid' });
+  await turn();
+  for (const { data } of updates.slice(-2)) assert.equal('hostTextColor' in data, false);
+});
 
 test('scheduled refresh delivers cached data before a stalled network sync', async () => {
   const { form, events } = formFixture();

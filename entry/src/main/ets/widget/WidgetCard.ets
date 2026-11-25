@@ -1,3 +1,4 @@
+import { widgetMaterialColor, widgetMaterialBlur } from './WidgetMaterial';
 import { CatSnack } from '../components/common/CatSnack';
 
 interface CardTask {
@@ -23,62 +24,6 @@ function parseTasks(value: string): CardTask[] {
   }
 }
 
-function blurStyleFor(style: string): BlurStyle {
-  if (style === 'thin') {
-    return BlurStyle.BACKGROUND_THIN;
-  }
-  if (style === 'regular') {
-    return BlurStyle.BACKGROUND_REGULAR;
-  }
-  if (style === 'thick') {
-    return BlurStyle.BACKGROUND_THICK;
-  }
-  return BlurStyle.NONE;
-}
-
-function isLightHostColor(color: string): boolean {
-  let value = color.toUpperCase();
-  if (value.length === 9 && value.startsWith('#')) {
-    value = `#${value.slice(3)}`;
-  }
-  if (value.length !== 7 || !value.startsWith('#')) {
-    return false;
-  }
-  const red = Number.parseInt(value.slice(1, 3), 16);
-  const green = Number.parseInt(value.slice(3, 5), 16);
-  const blue = Number.parseInt(value.slice(5, 7), 16);
-  return red * 299 + green * 587 + blue * 114 > 160000;
-}
-
-// FormKit supplies the inverse of the host background color. A dark inverse
-// therefore means the host background is light, and vice versa.
-function hasLightHostBackground(inverseHostColor: string): boolean {
-  return !isLightHostColor(inverseHostColor);
-}
-
-function foregroundColorFor(inverseHostColor: string): string {
-  // Keep the host's light/dark decision, without inheriting a translucent or
-  // tinted foreground that becomes hard to read over a detailed wallpaper.
-  return hasLightHostBackground(inverseHostColor) ? '#FF352E25' : '#FFFFF2D9';
-}
-
-function backgroundColorFor(style: string, inverseHostColor: string): string {
-  const lightHost = hasLightHostBackground(inverseHostColor);
-  if (style === 'none') {
-    return '#00000000';
-  }
-  if (style === 'thin') {
-    return lightHost ? '#35FFF3DA' : '#3B272C25';
-  }
-  if (style === 'regular') {
-    return lightHost ? '#78FFF3DA' : '#8534372F';
-  }
-  if (style === 'thick') {
-    return lightHost ? '#D9FFF3DA' : '#E034372F';
-  }
-  return '#00000000';
-}
-
 let storage = new LocalStorage();
 
 @Entry(storage)
@@ -87,8 +32,8 @@ struct WidgetCard {
   @LocalStorageProp('tasksJson') @Watch('onTasksJsonChange') tasksJson: string = '[]';
   @LocalStorageProp('pendingCount') pendingCount: string = '0';
   @LocalStorageProp('lastSyncText') lastSyncText: string = '未同步';
-  @LocalStorageProp('widgetBlurStyle') @Watch('onBlurStyleChange') widgetBlurStyle: string = 'thin';
-  @LocalStorageProp('textColor') @Watch('onTextColorChange') textColor: string = '#E6000000';
+  @LocalStorageProp('widgetBlurStyle') widgetBlurStyle: string = 'thin';
+  @LocalStorageProp('hostTextColor') hostTextColor: string = '';
   @LocalStorageProp('formDimension') formDimension: string = '2';
   @State completingId: string = '';
   @State cardTasks: CardTask[] = [];
@@ -98,19 +43,28 @@ struct WidgetCard {
     this.cardTasks = parseTasks(this.tasksJson);
   }
 
-  private onTextColorChange(): void {
-  }
-
-  private onBlurStyleChange(): void {
-  }
-
   private onTasksJsonChange(): void {
     this.cardTasks = parseTasks(this.tasksJson);
     this.completingId = '';
   }
 
-  private tc(): string {
-    return foregroundColorFor(this.textColor);
+  private tc(): ResourceColor {
+    if (this.widgetBlurStyle === 'none' && this.hostTextColor.length > 0) {
+      return this.hostTextColor;
+    }
+    return $r('app.color.text_primary');
+  }
+
+  private textOutline(): ShadowOptions[] {
+    if (this.widgetBlurStyle !== 'none') return [];
+    let color: ResourceColor = $r('app.color.widget_text_outline');
+    if (this.hostTextColor.length === 7) {
+      const rgb = Number.parseInt(this.hostTextColor.slice(1), 16);
+      const luminance = (rgb >> 16) * 299 + ((rgb >> 8) & 255) * 587 + (rgb & 255) * 114;
+      color = luminance > 128000 ? '#FF201B17' : '#FFFFFAED';
+    }
+    return [{ radius: 3, offsetX: 0, offsetY: 0, color },
+      { radius: 4, offsetX: 0, offsetY: 1, color }];
   }
 
   private pendingLabel(): string {
@@ -189,16 +143,18 @@ struct WidgetCard {
           .fontSize(this.usesCompactVisual() ? 14 : 15)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.tc())
+          .textShadow(this.textOutline())
         Text(`${this.cardTasks.length} 件事`)
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.tc())
-          .opacity(0.86)
+          .textShadow(this.textOutline())
+          .opacity(this.widgetBlurStyle === 'none' ? 1 : 0.86)
         Blank()
         SymbolGlyph($r('sys.symbol.chevron_right'))
           .fontSize(12)
           .fontColor([this.tc()])
-          .opacity(0.86)
+          .opacity(this.widgetBlurStyle === 'none' ? 1 : 0.86)
       }
       .width('100%')
       .height(this.usesCompactVisual() ? 22 : 26)
@@ -218,6 +174,7 @@ struct WidgetCard {
             .fontSize(this.isMini() ? 12 : 14)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.tc())
+            .textShadow(this.textOutline())
             .textAlign(TextAlign.Center)
         }
         .layoutWeight(1)
@@ -244,6 +201,7 @@ struct WidgetCard {
                   .fontSize(this.isMini() ? 12 : 13)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.tc())
+                  .textShadow(this.textOutline())
                   .opacity(this.completingId === row.item.id ? 0 : 1)
                   .animation({ duration: 600, curve: Curve.EaseOut })
                   .maxLines(this.isLarge() ? 2 : 1)
@@ -289,7 +247,8 @@ struct WidgetCard {
           Text(this.pendingLabel())
             .fontSize(this.isSquare() ? 10 : 11)
             .fontColor(this.tc())
-            .opacity(0.86)
+            .textShadow(this.textOutline())
+            .opacity(this.widgetBlurStyle === 'none' ? 1 : 0.86)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Blank()
@@ -308,8 +267,8 @@ struct WidgetCard {
       top: this.usesCompactVisual() ? 6 : 10,
       bottom: this.usesCompactVisual() ? 6 : 10
     })
-    .backgroundColor(backgroundColorFor(this.widgetBlurStyle, this.textColor))
-    .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
+    .backgroundColor(widgetMaterialColor(this.widgetBlurStyle))
+    .backgroundBlurStyle(widgetMaterialBlur(this.widgetBlurStyle))
     .borderRadius(16)
   }
 }

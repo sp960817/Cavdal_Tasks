@@ -89,6 +89,22 @@
       "value": "#60000000"
     },
     {
+      "name": "widget_text_outline",
+      "value": "#FF201B17"
+    },
+    {
+      "name": "widget_thin",
+      "value": "#AB272C25"
+    },
+    {
+      "name": "widget_regular",
+      "value": "#CA272C25"
+    },
+    {
+      "name": "widget_thick",
+      "value": "#E8272C25"
+    },
+    {
       "name": "widget_text",
       "value": "#F1F5F9"
     },

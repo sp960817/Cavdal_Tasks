@@ -6,14 +6,12 @@ import { SettingsStore, TaskRepository } from '../data/TaskRepository';
 
 const WIDGET_PREF_NAME = 'cavdal_widget_forms';
 const FORM_IDS_KEY = 'formIds';
-const TEXT_COLOR_KEY = 'textColor';
 const LOG_DOMAIN = 0x0000;
 const LOG_TAG = 'CavdalWidgetUpdate';
 
 interface FormTarget {
   formId: string;
   dimension?: number;
-  textColor?: string;
 }
 
 function parseFormIds(value: string): string[] {
@@ -56,18 +54,7 @@ export class WidgetUpdater {
     }
   }
 
-  static async savedTextColor(context: common.Context): Promise<string | undefined> {
-    try {
-      const pref = await preferences.getPreferences(context, WIDGET_PREF_NAME);
-      const color = `${await pref.get(TEXT_COLOR_KEY, '')}`;
-      return color.length > 0 ? color : undefined;
-    } catch (err) {
-      hilog.warn(LOG_DOMAIN, LOG_TAG, 'load text color failed: %{public}s', errorText(err));
-      return undefined;
-    }
-  }
-
-  static async registerForm(context: common.Context, formId: string, textColor?: string): Promise<void> {
+  static async registerForm(context: common.Context, formId: string): Promise<void> {
     if (formId.length === 0) {
       return;
     }
@@ -77,9 +64,6 @@ export class WidgetUpdater {
       if (formIds.indexOf(formId) < 0) {
         formIds.push(formId);
         await pref.put(FORM_IDS_KEY, JSON.stringify(formIds));
-      }
-      if (textColor !== undefined && textColor.length > 0) {
-        await pref.put(TEXT_COLOR_KEY, textColor);
       }
       await pref.flush();
     } catch (err) {
@@ -94,7 +78,6 @@ export class WidgetUpdater {
   }
 
   private static async runningForms(context: common.Context): Promise<FormTarget[]> {
-    const textColor = await WidgetUpdater.savedTextColor(context);
     try {
       const running = await formProvider.getPublishedRunningFormInfos();
       const targets: FormTarget[] = [];
@@ -103,7 +86,7 @@ export class WidgetUpdater {
         if (info.formName !== 'cavdal_tasks' || info.abilityName !== 'EntryFormAbility') {
           continue;
         }
-        targets.push({ formId: info.formId, dimension: info.dimension, textColor });
+        targets.push({ formId: info.formId, dimension: info.dimension });
       }
       if (targets.length > 0) {
         await WidgetUpdater.saveFormIds(context, targets.map((target: FormTarget) => target.formId));
@@ -115,7 +98,7 @@ export class WidgetUpdater {
 
     // Keep the registry as a fallback if FormManager is temporarily unavailable.
     const storedIds = await WidgetUpdater.formIds(context);
-    return storedIds.map((formId: string) => ({ formId, textColor } as FormTarget));
+    return storedIds.map((formId: string) => ({ formId } as FormTarget));
   }
 
   static updateAllForms(context: common.Context): Promise<void> {
@@ -142,9 +125,6 @@ export class WidgetUpdater {
       };
       if (target.dimension !== undefined) {
         bindingData['formDimension'] = `${target.dimension}`;
-      }
-      if (target.textColor !== undefined) {
-        bindingData['textColor'] = target.textColor;
       }
       const data = formBindingData.createFormBindingData(bindingData);
       try {

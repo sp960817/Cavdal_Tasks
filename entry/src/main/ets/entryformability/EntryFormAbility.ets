@@ -35,19 +35,16 @@ const EMPTY_PAYLOAD: WidgetPayload = {
   tasks: [], pendingCount: 0, lastSyncText: '读取失败'
 };
 
-const DEFAULT_TEXT_COLOR: string = '#80000000';
-
 function extractTextColor(params: Record<string, Object> | undefined): string | undefined {
   if (!params) {
     return undefined;
   }
-  const colorInfo = params[formInfo.FormParam.HOST_BG_INVERSE_COLOR_KEY] as TextColor;
-  if (!colorInfo) {
-    hilog.warn(LOG_DOMAIN, LOG_TAG, 'no host_bg_inverse_color in params');
-    return undefined;
-  }
-  hilog.info(LOG_DOMAIN, LOG_TAG, 'inverse color=%{public}s', colorInfo.mTextColor);
-  return colorInfo.mTextColor;
+  const value = params[formInfo.FormParam.HOST_BG_INVERSE_COLOR_KEY];
+  if (!value) return undefined;
+  const color = typeof value === 'string' ? value : (value as TextColor).mTextColor;
+  if (typeof color !== 'string' || !/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color)) return undefined;
+  // The launcher supplies a contrasting foreground. Use its hue at full opacity.
+  return '#' + color.slice(-6);
 }
 
 function extractFormDimension(params: Record<string, Object> | undefined): string | undefined {
@@ -62,7 +59,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
   private async refreshForm(formId: string, textColor?: string, formDimension?: string): Promise<void> {
     const appCtx = this.context.getApplicationContext();
     try {
-      await WidgetUpdater.registerForm(appCtx, formId, textColor);
+      await WidgetUpdater.registerForm(appCtx, formId);
     } catch (err) {
       hilog.warn(LOG_DOMAIN, LOG_TAG, 'form registry failed %{public}s', `${err}`);
     }
@@ -100,15 +97,14 @@ export default class EntryFormAbility extends FormExtensionAbility {
     } catch (err) {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'createData widgetPayload failed %{public}s', `${err}`);
     }
-    const resolvedTextColor = textColor ?? await WidgetUpdater.savedTextColor(appCtx);
     const bindingData: Record<string, string> = {
       'tasksJson': JSON.stringify(payload.tasks),
       'pendingCount': `${payload.pendingCount}`,
       'lastSyncText': payload.lastSyncText,
       'widgetBlurStyle': settings.widgetBlurStyle
     };
-    if (resolvedTextColor !== undefined) {
-      bindingData['textColor'] = resolvedTextColor;
+    if (textColor !== undefined) {
+      bindingData['hostTextColor'] = textColor;
     }
     if (formDimension !== undefined) {
       bindingData['formDimension'] = formDimension;
@@ -119,7 +115,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
 
   onAddForm(want: Want): formBindingData.FormBindingData {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'onAddForm called');
-    const textColor = extractTextColor(want.parameters as Record<string, Object> | undefined) ?? DEFAULT_TEXT_COLOR;
+    const textColor = extractTextColor(want.parameters as Record<string, Object> | undefined);
     const formDimension = extractFormDimension(want.parameters as Record<string, Object> | undefined) ??
       `${formInfo.FormDimension.Dimension_2_2}`;
     try {
@@ -149,7 +145,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
       pendingCount: '0',
       lastSyncText: '载入中',
       widgetBlurStyle: 'thin',
-      textColor: textColor,
+      hostTextColor: textColor ?? '',
       formDimension: formDimension
     });
   }
