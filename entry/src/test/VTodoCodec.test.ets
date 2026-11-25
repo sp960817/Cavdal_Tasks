@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { VTodoCodec } from '../main/ets/caldav/VTodoCodec';
+import { dueDayOffset } from '../main/ets/formatters/DueTimeFormatter';
 import { TodoTask } from '../main/ets/model/TaskModels';
 
 function readTask(ics: string): TodoTask {
@@ -12,6 +13,25 @@ function readTask(ics: string): TodoTask {
 
 export default function vTodoCodecTest() {
   describe('vTodoComponentProperties', () => {
+    it('roundTripsPriorityThroughCreateEditCompleteAndClear', 0, () => {
+      const original = VTodoCodec.createLocal('紧急待办', '', '', '/tasks/', '无', '无', 3);
+      expect(readTask(original.rawIcs).priority).assertEqual(3);
+      const edit = VTodoCodec.updateFields(original, '修改标题', '', '', '无', '无');
+      expect(readTask(edit.rawIcs).priority).assertEqual(3);
+      const important = VTodoCodec.updateFields(edit, edit.title, '', '', '无', '无', 1);
+      expect(readTask(VTodoCodec.setCompletion(important, true).rawIcs).priority).assertEqual(1);
+      const cleared = VTodoCodec.updateFields(important, important.title, '', '', '无', '无', 0);
+      expect(readTask(cleared.rawIcs).priority).assertEqual(0);
+    });
+
+    it('classifiesDueDatesAcrossBeijingMidnight', 0, () => {
+      const midnight = Date.UTC(2026, 10, 24, 16);
+      expect(dueDayOffset('20261124T155959Z', midnight)).assertEqual(-1);
+      expect(dueDayOffset('20261124T160000Z', midnight)).assertEqual(0);
+      expect(dueDayOffset('20261202', midnight)).assertEqual(7);
+      expect(dueDayOffset('', midnight) === undefined).assertTrue();
+    });
+
     it('doesNotUseAlarmDescriptionAsAnEmptyTaskBody', 0, () => {
       const original = VTodoCodec.createLocal('记下这件事', '', '20261020T080000Z', '/tasks/', '立刻');
       const parsed = readTask(original.rawIcs);

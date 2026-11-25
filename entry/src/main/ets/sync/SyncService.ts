@@ -9,6 +9,9 @@ import { WidgetUpdater } from '../widget/WidgetUpdater';
 
 const LOG_DOMAIN = 0x0000;
 const LOG_TAG = 'CavdalSync';
+// FormExtensionAbility is reclaimed after about 10 seconds of inactivity.
+// Reserve time for reading the database and delivering the form update.
+const WIDGET_SYNC_BUDGET_MS = 6000;
 
 export interface SyncResultSummary {
   ok: boolean;
@@ -50,14 +53,14 @@ export class SyncService {
     await this.refreshReminders();
   }
 
-  private async getClient(): Promise<{ client: CalDavClient; settings: AccountSettings; ok: boolean }> {
+  private async getClient(requestDeadline: number = 0): Promise<{ client: CalDavClient; settings: AccountSettings; ok: boolean }> {
     let settings: AccountSettings;
     try {
       settings = await this.settings.load();
     } catch (err) {
       return { client: undefined as unknown as CalDavClient, settings: {
         serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin',
-        handednessEnabled: false
+        handednessEnabled: false, feedingAnimation: true, compactRows: false
       } as AccountSettings, ok: false };
     }
     let password = '';
@@ -75,7 +78,7 @@ export class SyncService {
         serverUrl: settings.serverUrl,
         username: settings.username,
         password
-      });
+      }, requestDeadline);
     } catch (err) {
       return { client: undefined as unknown as CalDavClient, settings, ok: false };
     }
@@ -96,6 +99,10 @@ export class SyncService {
     await this.refreshWidgets();
   }
 
+  async savePixelOption(option: 'feedingAnimation' | 'compactRows', enabled: boolean): Promise<void> {
+    await this.settings.savePixelOption(option, enabled);
+  }
+
   async saveHandedness(enabled: boolean): Promise<void> {
     await this.settings.saveHandedness(enabled);
   }
@@ -107,11 +114,11 @@ export class SyncService {
     return calendars;
   }
 
-  async syncNow(): Promise<SyncResultSummary> {
+  async syncNow(fromWidget: boolean = false): Promise<SyncResultSummary> {
     if (syncNowInFlight !== undefined) {
       return syncNowInFlight;
     }
-    syncNowInFlight = this.doSyncNow();
+    syncNowInFlight = this.doSyncNow(fromWidget);
     try {
       return await syncNowInFlight;
     } finally {
@@ -119,11 +126,12 @@ export class SyncService {
     }
   }
 
-  private async doSyncNow(): Promise<SyncResultSummary> {
+  private async doSyncNow(fromWidget: boolean): Promise<SyncResultSummary> {
+    const requestDeadline = fromWidget ? Date.now() + WIDGET_SYNC_BUDGET_MS : 0;
     let client: CalDavClient;
     let settings: AccountSettings;
     try {
-      const loaded = await this.getClient();
+      const loaded = await this.getClient(requestDeadline);
       if (!loaded.ok) {
         await this.refreshWidgets();
         return { ok: false, message: 'CalDAV 未连接，待办将暂存本地', imported: 0 };
@@ -140,7 +148,7 @@ export class SyncService {
     // 1️⃣ 先推送本地离线变更（增/删/改）
     let flushErrors = 0;
     try {
-      flushErrors = await this.flushQueue(client);
+      flushErrors = await this.flushQueue(client, settings.calendarHref, requestDeadline);
       hilog.info(LOG_DOMAIN, LOG_TAG, 'flushQueue done errors=%{public}d', flushErrors);
     } catch (err) {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'flushQueue threw %{public}s', `${err}`);
@@ -165,16 +173,16 @@ export class SyncService {
     await this.repository.saveRemoteSnapshot(settings.calendarHref, tasks);
     settings.lastSyncAt = Date.now();
     await this.settings.saveLastSyncAt(settings.lastSyncAt);
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
     const summary = `已同步 ${tasks.length} 个待办`;
     const pending = flushErrors > 0 ? `，${flushErrors} 个离线操作待重试` : '';
     return { ok: true, message: `${summary}${pending}`, imported: tasks.length };
   }
 
-  async addTask(title: string, description: string, due: string, reminder: string = '无', repeat: string = '无'): Promise<void> {
+  async addTask(title: string, description: string, due: string, reminder: string = '无', repeat: string = '无', priority: number = 0): Promise<void> {
     const { client, settings, ok } = await this.getClient();
-    const task = VTodoCodec.createLocal(title, description, due, settings.calendarHref, reminder, repeat);
+    const task = VTodoCodec.createLocal(title, description, due, settings.calendarHref, reminder, repeat, priority);
     if (ok) {
       try {
         const result = await client.putTask(task);
@@ -194,8 +202,8 @@ export class SyncService {
     if (task.syncState === 'pending') {
       await this.repository.enqueue(this.operationFor(task));
     }
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
   }
 
   async setTaskCompleted(taskId: string, done: boolean): Promise<void> {
@@ -207,8 +215,8 @@ export class SyncService {
     updated.syncState = 'pending';
     await this.repository.saveTask(updated);
     await this.repository.enqueue(this.operationFor(updated));
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
     const { client, ok } = await this.getClient();
     if (ok) {
       try {
@@ -231,8 +239,8 @@ export class SyncService {
       }
     }
     await this.repository.saveTask(updated);
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
   }
 
   async setTaskCompletedLocally(taskId: string, done: boolean): Promise<boolean> {
@@ -244,14 +252,15 @@ export class SyncService {
     updated.syncState = 'pending';
     await this.repository.saveTask(updated);
     await this.repository.enqueue(this.operationFor(updated));
+    await this.refreshWidgets();
     await this.refreshReminders();
     return true;
   }
 
   async clearLocal(): Promise<void> {
     await this.repository.clearTasks();
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
   }
 
   private operationFor(task: TodoTask): SyncOperation {
@@ -297,8 +306,8 @@ export class SyncService {
         await this.repository.enqueue(this.makeDeleteOp(taskId, href, etag));
       }
     }
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
   }
 
   private makeDeleteOp(taskId: string, href: string, etag: string): SyncOperation {
@@ -313,12 +322,12 @@ export class SyncService {
     };
   }
 
-  async updateTask(taskId: string, title: string, description: string, due: string, reminder: string, repeat: string): Promise<void> {
+  async updateTask(taskId: string, title: string, description: string, due: string, reminder: string, repeat: string, priority?: number): Promise<void> {
     const task = await this.repository.getTask(taskId);
     if (task === undefined) {
       return;
     }
-    const updated = VTodoCodec.updateFields(task, title, description, due, reminder, repeat);
+    const updated = VTodoCodec.updateFields(task, title, description, due, reminder, repeat, priority ?? task.priority);
     updated.syncState = 'pending';
     // Persist first so the UI and offline state do not wait for the network request.
     await this.repository.saveTask(updated);
@@ -340,15 +349,19 @@ export class SyncService {
     if (updated.syncState === 'pending') {
       await this.repository.enqueue(this.operationFor(updated));
     }
-    await this.refreshReminders();
     await this.refreshWidgets();
+    await this.refreshReminders();
   }
 
-  private async flushQueue(client: CalDavClient): Promise<number> {
+  private async flushQueue(client: CalDavClient, calendarHref: string, requestDeadline: number = 0): Promise<number> {
     const operations = await this.repository.pendingOperations();
     hilog.info(LOG_DOMAIN, LOG_TAG, 'flushQueue %{public}d operations', operations.length);
     let failures = 0;
     for (let i = 0; i < operations.length; i++) {
+      if (requestDeadline > 0 && Date.now() >= requestDeadline) {
+        // Leave unattempted operations in the persistent queue for the next sync.
+        return failures + operations.length - i;
+      }
       const operation = operations[i];
       if (operation.type === 'delete') {
         hilog.info(LOG_DOMAIN, LOG_TAG, 'flush delete taskId=%{public}s', operation.taskId);
@@ -396,13 +409,16 @@ export class SyncService {
       }
       hilog.info(LOG_DOMAIN, LOG_TAG, 'flush put taskId=%{public}s title=%{public}s', task.id, task.title);
       try {
+        if (!task.calendarHref && !task.href) {
+          task.calendarHref = calendarHref;
+        }
         let result = await client.putTask(task);
         if (!result.ok && (result.status === 409 || result.status === 412) && task.href.length > 0) {
           hilog.warn(LOG_DOMAIN, LOG_TAG, 'flush stale etag, retry latest taskId=%{public}s', task.id);
           result = await client.putTask(task, true);
         }
         if (result.ok) {
-          await this.repository.markTaskSyncState(task.id, 'synced', result.etag);
+          await this.repository.markTaskSyncState(task.id, 'synced', result.etag, task.href, task.calendarHref);
           await this.repository.removePutOperations(task.id);
         } else if (result.status === 409 || result.status === 412) {
           await this.repository.markTaskSyncState(task.id, 'conflict');

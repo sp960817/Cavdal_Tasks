@@ -34,6 +34,8 @@ export interface AccountSettings {
   lastSyncAt: number;
   widgetBlurStyle: WidgetBlurStyle;
   handednessEnabled: boolean;
+  feedingAnimation: boolean;
+  compactRows: boolean;
 }
 
 export interface SyncOperation {

@@ -143,6 +143,8 @@ export class SettingsStore {
         calendarName: `${await pref.get('calendarName', '')}`,
         lastSyncAt: Number(await pref.get('lastSyncAt', 0)),
         widgetBlurStyle: widgetBlurStyle(`${await pref.get('widgetBlurStyle', 'thin')}`),
+        feedingAnimation: await pref.get('feedingAnimation', 'true') === 'true',
+        compactRows: await pref.get('compactRows', 'false') === 'true',
         handednessEnabled: `${await pref.get('handednessEnabled', 'false')}` === 'true'
       };
     } catch (err) {
@@ -182,6 +184,10 @@ export class SettingsStore {
     const write = SettingsStore.widgetStyleWrites.then(() => this.saveValue('widgetBlurStyle', style));
     SettingsStore.widgetStyleWrites = write.catch(() => {});
     await write;
+  }
+
+  async savePixelOption(option: 'feedingAnimation' | 'compactRows', enabled: boolean): Promise<void> {
+    await this.saveValue(option, enabled ? 'true' : 'false');
   }
 
   async saveHandedness(enabled: boolean): Promise<void> {
@@ -589,11 +595,12 @@ export class TaskRepository {
     }
   }
 
-  async markTaskSyncState(taskId: string, state: string, etag: string = ''): Promise<void> {
+  async markTaskSyncState(taskId: string, state: string, etag: string = '', href: string = '', calendarHref: string = ''): Promise<void> {
     try {
       const store = await this.db();
-      if (state === 'synced' || etag.length > 0) {
-        await store.executeSql('UPDATE tasks SET sync_state = ?, etag = ? WHERE id = ?', [state, etag, taskId]);
+      if (state === 'synced') {
+        await store.executeSql('UPDATE tasks SET sync_state = ?, etag = ?, href = ?, calendar_href = ? WHERE id = ?',
+          [state, etag, href, calendarHref, taskId]);
       } else {
         await store.executeSql('UPDATE tasks SET sync_state = ? WHERE id = ?', [state, taskId]);
       }

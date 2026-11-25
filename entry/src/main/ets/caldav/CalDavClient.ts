@@ -67,13 +67,19 @@ function headerValue(headers: Object, key: string): string {
 export class CalDavClient {
   private authHeader: string;
 
-  constructor(private credentials: CalDavCredentials) {
+  constructor(private credentials: CalDavCredentials, private requestDeadline: number = 0) {
     const helper = new util.Base64Helper();
     this.authHeader = `Basic ${helper.encodeToStringSync(utf8Bytes(`${credentials.username}:${credentials.password}`))}`;
   }
 
   private async request(url: string, method: string, body: string = '', extraHeaders: Record<string, string> = {}): Promise<http.HttpResponse> {
+    const remaining = this.requestDeadline > 0 ? this.requestDeadline - Date.now() : 30000;
+    if (remaining <= 0) {
+      throw new Error('卡片后台同步已超时，保留本地数据并等待下次刷新');
+    }
+    const timeout = Math.min(30000, remaining);
     const request = http.createHttp();
+    let deadlineTimer: number | undefined = undefined;
     try {
       const headers: Record<string, string> = {
         'Authorization': this.authHeader,
@@ -85,24 +91,38 @@ export class CalDavClient {
         headers[headerKeys[i]] = extraHeaders[headerKeys[i]];
       }
       hilog.info(LOG_DOMAIN, LOG_TAG, '%{public}s %{public}s', method, url);
-      let response: http.HttpResponse;
+      let responsePromise: Promise<http.HttpResponse>;
       if (body.length > 0) {
-        response = await request.request(url, {
+        responsePromise = request.request(url, {
           method: method as http.RequestMethod,
           header: headers,
           extraData: body,
           expectDataType: http.HttpDataType.STRING,
-          readTimeout: 30000,
-          connectTimeout: 30000
+          readTimeout: timeout,
+          connectTimeout: timeout
         });
       } else {
-        response = await request.request(url, {
+        responsePromise = request.request(url, {
           method: method as http.RequestMethod,
           header: headers,
           expectDataType: http.HttpDataType.STRING,
-          readTimeout: 30000,
-          connectTimeout: 30000
+          readTimeout: timeout,
+          connectTimeout: timeout
         });
+      }
+      let response: http.HttpResponse;
+      if (this.requestDeadline > 0) {
+        // Destroying HttpRequest need not settle its Promise. Explicitly reject
+        // too, so the sync lock is released and future refreshes can retry.
+        const deadlinePromise = new Promise<http.HttpResponse>((_resolve, reject) => {
+          deadlineTimer = setTimeout(() => {
+            reject(new Error('卡片后台同步已超时'));
+            request.destroy();
+          }, Math.max(1, this.requestDeadline - Date.now()));
+        });
+        response = await Promise.race([responsePromise, deadlinePromise]);
+      } else {
+        response = await responsePromise;
       }
       hilog.info(LOG_DOMAIN, LOG_TAG, '-> %{public}d %{public}s', Number(response.responseCode), url);
       return response;
@@ -110,6 +130,9 @@ export class CalDavClient {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'Request failed %{public}s %{public}s err=%{public}s', method, url, errorText(err));
       throw new Error(`${method} ${url} failed: ${errorText(err)}`);
     } finally {
+      if (deadlineTimer !== undefined) {
+        clearTimeout(deadlineTimer);
+      }
       request.destroy();
     }
   }

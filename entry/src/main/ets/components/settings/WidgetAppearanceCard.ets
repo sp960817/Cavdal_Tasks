@@ -1,3 +1,4 @@
+import { CatSnack } from '../common/CatSnack';
 import { WidgetBlurStyle } from '../../model/TaskModels';
 
 export function widgetBlurLabel(style: WidgetBlurStyle): string {
@@ -30,59 +31,21 @@ export struct WidgetAppearanceCard {
   @Builder
   private MaterialPreview(style: WidgetBlurStyle) {
     Stack({ alignContent: Alignment.Center }) {
-      Column()
-        .width('100%')
-        .height(68)
-        .linearGradient({
-          angle: 135,
-          colors: [[$r('app.color.accent_soft'), 0], [$r('app.color.accent'), 1]]
-        })
-        .borderRadius(14)
-
-      Column({ space: 5 }) {
-        Row({ space: 4 }) {
-          Column()
-            .width(5)
-            .height(5)
-            .backgroundColor($r('app.color.text_secondary'))
-            .borderRadius(3)
-          Column()
-            .height(3)
-            .layoutWeight(1)
-            .backgroundColor($r('app.color.text_secondary'))
-            .borderRadius(2)
-        }
-        .width('100%')
-        .opacity(0.72)
-        Row({ space: 4 }) {
-          Column()
-            .width(5)
-            .height(5)
-            .backgroundColor($r('app.color.text_secondary'))
-            .borderRadius(3)
-          Column()
-            .height(3)
-            .width('50%')
-            .backgroundColor($r('app.color.text_secondary'))
-            .borderRadius(2)
-        }
-        .width('100%')
-        .opacity(0.48)
+      Column({ space: 3 }) {
+        Image($r('app.media.cat_idle')).width(24).height(24).objectFit(ImageFit.Contain)
+        CatSnack({ taskId: style }).width(32).height(6)
       }
       .justifyContent(FlexAlign.Center)
       .width('78%')
-      .height(42)
-      .padding(8)
+      .height(48)
       .backgroundColor(style === 'none' ? Color.Transparent :
         style === 'thick' ? $r('app.color.surface') : $r('app.color.glass_fill'))
       .backgroundBlurStyle(previewBlurStyle(style))
-      .border({ width: 0.6, color: $r('app.color.glass_edge') })
       .borderRadius(10)
     }
     .width('100%')
     .height(68)
-    .clip(true)
-    .borderRadius(14)
+
   }
 
   build() {
@@ -99,34 +62,27 @@ export struct WidgetAppearanceCard {
       }
       .width('100%')
 
-      Row({ space: 8 }) {
-        ForEach(this.styles, (style: WidgetBlurStyle) => {
-          Button() {
-            Column({ space: 8 }) {
-              this.MaterialPreview(style)
-              Text(widgetBlurLabel(style))
-                .fontSize(12)
-                .fontWeight(this.selectedStyle === style ? FontWeight.Bold : FontWeight.Normal)
-                .fontColor(this.selectedStyle === style ?
-                  $r('app.color.accent') : $r('app.color.text_secondary'))
-            }
-            .width('100%')
-          }
-          .type(ButtonType.Normal)
-          .layoutWeight(1)
-          .padding(4)
-          .backgroundColor(this.selectedStyle === style ?
-            $r('app.color.accent_soft') : Color.Transparent)
-          .border({
-            width: this.selectedStyle === style ? 1.5 : 0.5,
-            color: this.selectedStyle === style ? $r('app.color.accent') : $r('app.color.divider')
-          })
-          .borderRadius(18)
-          .accessibilityText(`${widgetBlurLabel(style)}${this.selectedStyle === style ? '，已选择' : ''}`)
-          .onClick(() => this.onStyleChange(style))
-        }, (style: WidgetBlurStyle) => style)
-      }
-      .width('100%')
+      Stack({ alignContent: Alignment.Top }) {
+        Image($r('app.media.cat_meadow')).width('100%').height(68).objectFit(ImageFit.Cover)
+          .borderRadius(12).accessibilityLevel('no')
+        Row() {
+          ForEach(this.styles, (style: WidgetBlurStyle) => {
+            Button() {
+              Column({ space: 6 }) {
+                this.MaterialPreview(style)
+                Text(widgetBlurLabel(style)).fontSize(12)
+                  .fontWeight(this.selectedStyle === style ? FontWeight.Bold : FontWeight.Normal)
+                  .fontColor(this.selectedStyle === style ? $r('app.color.accent') : $r('app.color.text_secondary'))
+                Row().width(16).height(2)
+                  .backgroundColor(this.selectedStyle === style ? $r('app.color.accent') : Color.Transparent)
+              }.width('100%')
+            }.type(ButtonType.Normal).layoutWeight(1).padding(0)
+              .backgroundColor(Color.Transparent)
+              .accessibilityText(widgetBlurLabel(style) + (this.selectedStyle === style ? '，已选择' : ''))
+              .onClick(() => this.onStyleChange(style))
+          }, (style: WidgetBlurStyle) => style)
+        }.width('100%')
+      }.width('100%')
 
       Text(this.styleDescription())
         .fontSize(12)
@@ -135,9 +91,6 @@ export struct WidgetAppearanceCard {
         .lineHeight(18)
     }
     .width('100%')
-    .padding(18)
-    .backgroundColor($r('app.color.surface'))
-    .border({ width: 0.5, color: $r('app.color.divider') })
-    .borderRadius(24)
+    .padding({ left: 4, right: 4, top: 8, bottom: 8 })
   }
 }

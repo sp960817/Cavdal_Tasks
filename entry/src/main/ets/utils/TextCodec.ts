@@ -1,9 +1,12 @@
-import util from '@ohos.util';
+import { buffer } from '@kit.ArkTS';
 
 export function utf8Bytes(value: string): Uint8Array {
-  return util.TextEncoder.create('utf-8').encodeInto(value);
+  const encoded = buffer.from(value, 'utf8');
+  const bytes = new Uint8Array(encoded.length);
+  encoded.copy(bytes);
+  return bytes;
 }
 
 export function utf8String(bytes: Uint8Array): string {
-  return util.TextDecoder.create('utf-8', { fatal: false, ignoreBOM: true }).decodeToString(bytes);
+  return buffer.from(bytes).toString('utf8');
 }

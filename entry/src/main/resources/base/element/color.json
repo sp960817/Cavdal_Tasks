@@ -2,39 +2,39 @@
   "color": [
     {
       "name": "start_window_background",
-      "value": "#F5F3EE"
+      "value": "#F7EEDB"
     },
     {
       "name": "page_background",
-      "value": "#F5F3EE"
+      "value": "#F7EEDB"
     },
     {
       "name": "surface",
-      "value": "#FFFEFB"
+      "value": "#FFFAEB"
     },
     {
       "name": "surface_translucent",
-      "value": "#EFFFFEFB"
+      "value": "#FFFDF4E5"
     },
     {
       "name": "surface_input",
-      "value": "#E9EDF0"
+      "value": "#EFE2C9"
     },
     {
       "name": "surface_subtle",
-      "value": "#ECEEEB"
+      "value": "#F1E6CF"
     },
     {
       "name": "text_primary",
-      "value": "#19252E"
+      "value": "#382E29"
     },
     {
       "name": "text_secondary",
-      "value": "#536571"
+      "value": "#594B40"
     },
     {
       "name": "text_tertiary",
-      "value": "#697985"
+      "value": "#705E50"
     },
     {
       "name": "text_disabled",
@@ -42,15 +42,15 @@
     },
     {
       "name": "divider",
-      "value": "#DEE3E4"
+      "value": "#C4AD90"
     },
     {
       "name": "accent",
-      "value": "#4C6D8D"
+      "value": "#366855"
     },
     {
       "name": "accent_soft",
-      "value": "#E1EAF1"
+      "value": "#DFEBD5"
     },
     {
       "name": "on_accent",
@@ -122,7 +122,7 @@
     },
     {
       "name": "bar_glass",
-      "value": "#80F6F8FA"
+      "value": "#DEE8D4"
     },
     {
       "name": "bar_glass_edge",
@@ -130,11 +130,11 @@
     },
     {
       "name": "hero_start",
-      "value": "#E4EDF2"
+      "value": "#BDDDBE"
     },
     {
       "name": "hero_end",
-      "value": "#F2F1E9"
+      "value": "#F4D59B"
     },
     {
       "name": "glass_fill",

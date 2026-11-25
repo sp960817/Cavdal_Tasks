@@ -1,3 +1,5 @@
+import { CatSnack } from '../components/common/CatSnack';
+
 interface CardTask {
   id: string;
   title: string;
@@ -57,7 +59,7 @@ function hasLightHostBackground(inverseHostColor: string): boolean {
 function foregroundColorFor(inverseHostColor: string): string {
   // Keep the host's light/dark decision, without inheriting a translucent or
   // tinted foreground that becomes hard to read over a detailed wallpaper.
-  return hasLightHostBackground(inverseHostColor) ? '#FF17232E' : '#FFF7F9FC';
+  return hasLightHostBackground(inverseHostColor) ? '#FF352E25' : '#FFFFF2D9';
 }
 
 function backgroundColorFor(style: string, inverseHostColor: string): string {
@@ -66,23 +68,15 @@ function backgroundColorFor(style: string, inverseHostColor: string): string {
     return '#00000000';
   }
   if (style === 'thin') {
-    return lightHost ? '#35FFFEFB' : '#3B10171D';
+    return lightHost ? '#35FFF3DA' : '#3B272C25';
   }
   if (style === 'regular') {
-    return lightHost ? '#78FFFEFB' : '#851B252E';
+    return lightHost ? '#78FFF3DA' : '#8534372F';
   }
   if (style === 'thick') {
-    return lightHost ? '#D9FFFEFB' : '#E01B252E';
+    return lightHost ? '#D9FFF3DA' : '#E034372F';
   }
   return '#00000000';
-}
-
-function borderColorFor(style: string, inverseHostColor: string): string {
-  const lightHost = hasLightHostBackground(inverseHostColor);
-  if (style === 'none') {
-    return '#00000000';
-  }
-  return lightHost ? '#24000000' : '#33FFFFFF';
 }
 
 let storage = new LocalStorage();
@@ -189,6 +183,8 @@ struct WidgetCard {
   build() {
     Column({ space: this.usesCompactVisual() ? 3 : 5 }) {
       Row({ space: 6 }) {
+        Image($r('app.media.cat_idle')).width(this.isMini() ? 17 : 22).height(this.isMini() ? 19 : 25)
+          .objectFit(ImageFit.Contain).accessibilityLevel('no')
         Text('拾序')
           .fontSize(this.usesCompactVisual() ? 14 : 15)
           .fontWeight(FontWeight.Bold)
@@ -212,13 +208,13 @@ struct WidgetCard {
       if (this.cardTasks.length === 0) {
         Column({ space: 5 }) {
           if (!this.isMini()) {
-            Image($r('app.media.material_empty_tray'))
+            Image($r('app.media.bowl_empty'))
               .width(this.isLarge() ? 64 : 48)
               .height(this.isLarge() ? 64 : 48)
               .objectFit(ImageFit.Contain)
               .accessibilityLevel('no')
           }
-          Text('今天，从容一点')
+          Text('清单空了，晒晒太阳')
             .fontSize(this.isMini() ? 12 : 14)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.tc())
@@ -234,32 +230,17 @@ struct WidgetCard {
             ListItem() {
               Row({ space: this.isSquare() ? 4 : 5 }) {
                 Stack({ alignContent: Alignment.Center }) {
-                  Text('')
-                    .width(18)
-                    .height(18)
-                    .borderRadius(9)
-                    .border({ width: 1.4, color: this.tc() })
-                    .backgroundColor(this.completingId === row.item.id ?
-                      '#4C6D8D' : '#00000000')
-                    .animation({ duration: 400, curve: Curve.EaseOut })
-
-                  Text('✓')
-                    .fontSize(11)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor('#FFFFFFFF')
-                    .opacity(this.completingId === row.item.id ? 1 : 0)
-                    .scale({
-                      x: this.completingId === row.item.id ? 1 : 0.3,
-                      y: this.completingId === row.item.id ? 1 : 0.3
-                    })
-                    .animation({ duration: 500, curve: Curve.EaseOut })
+                  Image(this.completingId === row.item.id ? $r('app.media.bowl_empty') : $r('app.media.bowl_full'))
+                    .width(this.isMini() ? 20 : 26).height(this.isMini() ? 20 : 26)
+                    .objectFit(ImageFit.Contain)
                 }
                 .width(this.isSquare() ? 28 : 30)
                 .height(this.taskRowHeight())
                 .accessibilityText(`完成 ${row.item.title}`)
                 .onClick(() => this.completeTask(row.item))
 
-                Text(row.item.title)
+                Column({ space: 1 }) {
+                  Text(row.item.title)
                   .fontSize(this.isMini() ? 12 : 13)
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.tc())
@@ -268,8 +249,10 @@ struct WidgetCard {
                   .maxLines(this.isLarge() ? 2 : 1)
                   .lineHeight(this.isMini() ? 16 : 18)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .layoutWeight(1)
-                  .onClick(() => this.openApp())
+                    .width('100%')
+                  CatSnack({ taskId: row.item.id }).width('67%').height(6)
+                    .opacity(this.completingId === row.item.id ? 0 : 1).accessibilityLevel('no')
+                }.alignItems(HorizontalAlign.Start).layoutWeight(1).onClick(() => this.openApp())
 
                 if (row.item.hasReminder && !this.usesCompactVisual()) {
                   SymbolGlyph($r('sys.symbol.bell'))
@@ -327,7 +310,6 @@ struct WidgetCard {
     })
     .backgroundColor(backgroundColorFor(this.widgetBlurStyle, this.textColor))
     .backgroundBlurStyle(blurStyleFor(this.widgetBlurStyle))
-    .border({ width: 0.6, color: borderColorFor(this.widgetBlurStyle, this.textColor) })
-    .borderRadius(24)
+    .borderRadius(16)
   }
 }

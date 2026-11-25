@@ -5,6 +5,7 @@ import reminderAgentManager from '@ohos.reminderAgentManager';
 import notificationManager from '@ohos.notificationManager';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
+import { formatReminderContent, formatReminderTitle } from '../formatters/ReminderFormatter';
 import { TodoTask } from '../model/TaskModels';
 import { TaskRepository } from '../data/TaskRepository';
 import { WidgetUpdater } from '../widget/WidgetUpdater';
@@ -13,7 +14,9 @@ const REMINDER_SLOT_TYPE = notificationManager.SlotType.SERVICE_INFORMATION;
 const ALL_DAYS_OF_WEEK: number[] = [1, 2, 3, 4, 5, 6, 7];
 const BUNDLE_NAME = 'com.example.cavdal_tasks';
 const ENTRY_ABILITY = 'EntryAbility';
-const REMINDER_RING_DURATION = 5;
+// Zero selects the ordinary system notification tone/vibration instead of
+// running the agent reminder's timed ringing/vibration loop.
+const REMINDER_RING_DURATION = 0;
 const REMINDER_MAP_PREF = 'cavdal_reminder_map';
 const REMINDER_MAP_KEY = 'reminderIdToTaskId';
 const LOG_DOMAIN = 0x0000;
@@ -137,11 +140,7 @@ export class ReminderService {
   private async ensureNotificationSlot(): Promise<void> {
     try {
       await reminderAgentManager.addNotificationSlot({
-        notificationType: REMINDER_SLOT_TYPE,
-        badgeFlag: true,
-        bypassDnd: false,
-        vibrationEnabled: true,
-        desc: 'Cavdal Tasks 待办提醒'
+        notificationType: REMINDER_SLOT_TYPE
       });
     } catch (err) {
       console.error(`[ReminderService] ensureNotificationSlot failed: ${errorText(err)}`);
@@ -267,11 +266,12 @@ export class ReminderService {
       return { triggerAt, skipReason: '提醒时间已过' };
     }
 
+    const content = formatReminderContent(task.title, task.description, task.due, repeat);
     const request = {
       reminderType: reminderAgentManager.ReminderType.REMINDER_TYPE_CALENDAR,
-      title: task.title,
-      content: task.description.length > 0 ? task.description : `待办提醒：${task.title}`,
-      expiredContent: task.title,
+      title: formatReminderTitle(task.title),
+      content,
+      expiredContent: content,
       notificationId: this.notificationId(task.id),
       slotType: REMINDER_SLOT_TYPE,
       ringDuration: REMINDER_RING_DURATION,

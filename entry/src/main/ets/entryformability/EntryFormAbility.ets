@@ -28,7 +28,7 @@ interface TextColor {
 
 const EMPTY_SETTINGS: AccountSettings = {
   serverUrl: '', username: '', calendarHref: '', calendarName: '', lastSyncAt: 0, widgetBlurStyle: 'thin',
-  handednessEnabled: false
+  handednessEnabled: false, feedingAnimation: true, compactRows: false
 };
 
 const EMPTY_PAYLOAD: WidgetPayload = {
@@ -59,6 +59,28 @@ function extractFormDimension(params: Record<string, Object> | undefined): strin
 }
 
 export default class EntryFormAbility extends FormExtensionAbility {
+  private async refreshForm(formId: string, textColor?: string, formDimension?: string): Promise<void> {
+    const appCtx = this.context.getApplicationContext();
+    try {
+      await WidgetUpdater.registerForm(appCtx, formId, textColor);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, 'form registry failed %{public}s', `${err}`);
+    }
+    // Always deliver cached data first, including changes to the date window.
+    // A slow/offline server must not prevent this lifecycle from updating UI.
+    try {
+      await formProvider.updateForm(formId, await this.createData(textColor, formDimension));
+      hilog.info(LOG_DOMAIN, LOG_TAG, 'cached form updated id=%{public}s', formId);
+    } catch (err) {
+      hilog.warn(LOG_DOMAIN, LOG_TAG, 'cached form update failed %{public}s', `${err}`);
+    }
+    // SyncService publishes the fresh snapshot to all forms before registering
+    // reminders, using a shared six-second network deadline for this callback.
+    const result = await new SyncService(appCtx).syncNow(true);
+    hilog.info(LOG_DOMAIN, LOG_TAG, 'form sync id=%{public}s ok=%{public}s: %{public}s',
+      formId, `${result.ok}`, result.message);
+  }
+
   private async createData(textColor?: string, formDimension?: string): Promise<formBindingData.FormBindingData> {
     // 使用应用级上下文与主应用共享数据存储
     const appCtx = this.context.getApplicationContext();
@@ -115,13 +137,8 @@ export default class EntryFormAbility extends FormExtensionAbility {
       const formId = rawId !== undefined ? `${rawId}` : '';
       hilog.info(LOG_DOMAIN, LOG_TAG, 'onAddForm formId=%{public}s', formId);
       if (formId.length > 0) {
-        WidgetUpdater.registerForm(this.context.getApplicationContext(), formId, textColor).catch(() => {
-        });
-        this.createData(textColor, formDimension).then((data: formBindingData.FormBindingData) => {
-          formProvider.updateForm(formId, data);
-          hilog.info(LOG_DOMAIN, LOG_TAG, 'onAddForm updateForm ok id=%{public}s', formId);
-        }).catch((err: Object) => {
-          hilog.error(LOG_DOMAIN, LOG_TAG, 'onAddForm updateForm failed %{public}s', `${err}`);
+        this.refreshForm(formId, textColor, formDimension).catch((err: Object) => {
+          hilog.error(LOG_DOMAIN, LOG_TAG, 'onAddForm refresh failed %{public}s', `${err}`);
         });
       }
     } catch (err) {
@@ -141,15 +158,7 @@ export default class EntryFormAbility extends FormExtensionAbility {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'onUpdateForm id=%{public}s', formId);
     const textColor = extractTextColor(wantParams);
     const formDimension = extractFormDimension(wantParams);
-    WidgetUpdater.registerForm(this.context.getApplicationContext(), formId, textColor).catch(() => {
-    });
-    const appCtx = this.context.getApplicationContext();
-    new SyncService(appCtx).syncNow().catch((err: Object) => {
-      hilog.warn(LOG_DOMAIN, LOG_TAG, 'onUpdateForm sync failed %{public}s', `${err}`);
-    }).then(() => this.createData(textColor, formDimension)).then((data: formBindingData.FormBindingData) => {
-      formProvider.updateForm(formId, data);
-      hilog.info(LOG_DOMAIN, LOG_TAG, 'onUpdateForm updateForm ok id=%{public}s', formId);
-    }).catch((err: Object) => {
+    this.refreshForm(formId, textColor, formDimension).catch((err: Object) => {
       hilog.error(LOG_DOMAIN, LOG_TAG, 'onUpdateForm failed %{public}s', `${err}`);
     });
   }
@@ -167,13 +176,10 @@ export default class EntryFormAbility extends FormExtensionAbility {
     if (operation === 'complete' && taskId.length > 0) {
       const appCtx = this.context.getApplicationContext();
       const syncService = new SyncService(appCtx);
-      syncService.setTaskCompleted(taskId, true).then(() => {
-        return this.createData();
-      }).then((data: formBindingData.FormBindingData) => {
-        setTimeout(() => {
-          formProvider.updateForm(formId, data);
-          hilog.info(LOG_DOMAIN, LOG_TAG, 'onFormEvent complete ok id=%{public}s', formId);
-        }, 700);
+      syncService.setTaskCompletedLocally(taskId, true).then(() => {
+        // Persist completion and refresh every card before attempting the network.
+        // No delayed payload can overwrite a newer snapshot.
+        return syncService.syncNow(true);
       }).catch((err: Object) => {
         hilog.error(LOG_DOMAIN, LOG_TAG, 'onFormEvent complete failed %{public}s', `${err}`);
       });

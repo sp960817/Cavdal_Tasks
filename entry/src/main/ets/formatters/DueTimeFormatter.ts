@@ -82,6 +82,12 @@ export function parseDueAsBeijing(rawDue: string): BeijingDueParts | undefined {
   return { year, month, day, hour, minute, hasTime: true };
 }
 
+export function dueDayOffset(rawDue: string, now: number = Date.now()): number | undefined {
+  const due = parseDueAsBeijing(rawDue);
+  if (due === undefined) return undefined;
+  return dayIndex(due.year, due.month, due.day) - Math.floor((now + BEIJING_OFFSET_MS) / DAY_MS);
+}
+
 export function formatDueForDisplay(rawDue: string): string {
   const due = parseDueAsBeijing(rawDue);
   if (due === undefined) {

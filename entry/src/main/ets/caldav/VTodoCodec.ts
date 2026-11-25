@@ -191,7 +191,7 @@ export class VTodoCodec {
    */
   private static buildRawIcs(uid: string, title: string, description: string, due: string,
     status: string, percent: number, completedAt: string, lastModified: Date,
-    reminder: string, repeat: string): string {
+    reminder: string, repeat: string, priority: number): string {
     const stamp = toUtcStamp(lastModified);
     const alarmTrigger = VTodoCodec.reminderTrigger(reminder, due);
     const repeatRule = VTodoCodec.repeatRule(repeat);
@@ -207,6 +207,9 @@ export class VTodoCodec {
     ];
     if (description.length > 0) {
       lines.push(`DESCRIPTION:${escapeText(description)}`);
+    }
+    if (priority > 0) {
+      lines.push(`PRIORITY:${priority}`);
     }
     if (due.length > 0) {
       lines.push(`DUE:${due}`);
@@ -232,10 +235,10 @@ export class VTodoCodec {
     return lines.filter((line: string) => line.length > 0).map(foldLine).join('\r\n') + '\r\n';
   }
 
-  static createLocal(title: string, description: string, due: string, calendarHref: string, reminder: string = '无', repeat: string = '无'): TodoTask {
+  static createLocal(title: string, description: string, due: string, calendarHref: string, reminder: string = '无', repeat: string = '无', priority: number = 0): TodoTask {
     const now = Date.now();
     const uid = generateUid();
-    const raw = VTodoCodec.buildRawIcs(uid, title, description, due, 'NEEDS-ACTION', 0, '', new Date(now), reminder, repeat);
+    const raw = VTodoCodec.buildRawIcs(uid, title, description, due, 'NEEDS-ACTION', 0, '', new Date(now), reminder, repeat, priority);
     return {
       id: uid,
       uid,
@@ -245,7 +248,7 @@ export class VTodoCodec {
       title,
       description,
       due,
-      priority: 0,
+      priority,
       status: 'NEEDS-ACTION',
       completedAt: '',
       percentComplete: 0,
@@ -401,7 +404,7 @@ export class VTodoCodec {
     };
   }
 
-  static updateFields(task: TodoTask, title: string, description: string, due: string, reminder: string, repeat: string): TodoTask {
+  static updateFields(task: TodoTask, title: string, description: string, due: string, reminder: string, repeat: string, priority: number = task.priority): TodoTask {
     const uid = extractUid(task.rawIcs);
     const now = new Date();
     const stamp = toUtcStamp(now);
@@ -410,6 +413,11 @@ export class VTodoCodec {
     values.set('UID', uid);
     values.set('LAST-MODIFIED', stamp);
     values.set('SUMMARY', escapeText(title));
+    if (priority > 0) {
+      values.set('PRIORITY', `${priority}`);
+    } else {
+      remove.push('PRIORITY');
+    }
     if (description.length > 0) {
       values.set('DESCRIPTION', escapeText(description));
     } else {
@@ -436,7 +444,7 @@ export class VTodoCodec {
       title,
       description,
       due,
-      priority: task.priority,
+      priority,
       status: task.status,
       completedAt: task.completedAt,
       percentComplete: task.percentComplete,

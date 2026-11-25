@@ -4,11 +4,12 @@ import notificationManager from '@ohos.notificationManager';
 import { CalendarSource, TodoTask, WidgetBlurStyle } from '../model/TaskModels';
 import { TaskRepository } from '../data/TaskRepository';
 import { SyncService } from '../sync/SyncService';
-import { parseDueAsBeijing } from '../formatters/DueTimeFormatter';
+import { dueDayOffset, parseDueAsBeijing } from '../formatters/DueTimeFormatter';
 import { VTodoCodec } from '../caldav/VTodoCodec';
 import { HdsTabs, HdsTabsController, hdsMaterial } from '@kit.UIDesignKit';
 import { SymbolGlyphModifier, curves, uiMaterial } from '@kit.ArkUI';
 import { motion } from '@kit.MultimodalAwarenessKit';
+import { TaskTextLayout } from '../components/common/TaskTextLayout';
 import { TaskCards } from '../components/home/TaskCards';
 import { WidgetAppearanceCard, widgetBlurLabel } from '../components/settings/WidgetAppearanceCard';
 import { taskSheetOptions } from '../components/common/MaterialStyles';
@@ -16,6 +17,7 @@ import { taskSheetOptions } from '../components/common/MaterialStyles';
 @Entry
 @Component
 struct Index {
+  private noteLayout: TaskTextLayout = new TaskTextLayout();
   @State configured: boolean = false;
   @State loading: boolean = true;
   @State testingConnection: boolean = false;
@@ -48,11 +50,14 @@ struct Index {
   private tabBarLayoutPassTriggered: boolean = false;
   @State showEditSheet: boolean = false;
   @State showSearch: boolean = false;
-  @State homeViewportHeight: number = 0;
   @State searchQuery: string = '';
   @State editingTask: TodoTask | null = null;
   @State editingTitle: string = '';
   @State editingDescription: string = '';
+  @State collection: string = '全部';
+  @State priority: number = 0;
+  @State feedingAnimation: boolean = true;
+  @State compactRows: boolean = false;
   @State handednessEnabled: boolean = false;
   @State fabAlignRules: AlignRuleOption = {
     right: { anchor: '__container__', align: HorizontalAlign.End },
@@ -220,13 +225,15 @@ struct Index {
       this.username = settings.username;
       this.calendarName = settings.calendarName;
       this.widgetBlurStyle = settings.widgetBlurStyle;
+      this.feedingAnimation = settings.feedingAnimation;
+      this.compactRows = settings.compactRows;
       this.handednessEnabled = settings.handednessEnabled;
       if (settings.handednessEnabled) {
         this.registerHoldingHand();
       }
-      this.statusText = this.configured ? '准备同步' : '请配置 CalDAV Tasks 账号';
+      this.statusText = this.configured ? '准备同步' : '已就绪 · 本机清单';
       await this.refreshLists();
-      if (await this.ensureReminderNotifications(this.tasks.some((task: TodoTask) => this.taskHasReminder(task)))) {
+      if (this.tasks.some((task: TodoTask) => this.taskHasReminder(task)) && await this.ensureReminderNotifications(true)) {
         await this.syncService.syncLocalReminders();
       }
     } catch (err) {
@@ -239,7 +246,7 @@ struct Index {
   }
 
   private scheduleTabBarLayoutPass(): void {
-    if (!deviceInfo.apiAvailable('26.0.0') || !this.configured || this.tabBarLayoutPassTriggered) {
+    if (!deviceInfo.apiAvailable('26.0.0') || this.tabBarLayoutPassTriggered) {
       return;
     }
     this.tabBarLayoutPassTriggered = true;
@@ -288,12 +295,11 @@ struct Index {
       return;
     }
     try {
-      const wasConfigured = this.configured;
       const selectedCalendar = this.calendars[this.selectedCalendarIndex];
       await this.syncService.saveAccount(this.serverUrl, this.username, this.password, selectedCalendar);
       this.configured = true;
       this.calendarName = selectedCalendar.displayName;
-      if (wasConfigured && this.settingsPathStack.size() > 0) {
+      if (this.settingsPathStack.size() > 0) {
         this.settingsPathStack.pop();
       } else {
         this.selectedTabIndex = 0;
@@ -352,7 +358,8 @@ struct Index {
         this.newDescription.trim(),
         this.hasDue ? this.formatDueForCalDav() : '',
         this.hasDue ? this.reminderOption : '无',
-        this.hasDue ? this.repeatOption : '无'
+        this.hasDue ? this.repeatOption : '无',
+        this.priority
       );
       this.newTitle = '';
       this.newDescription = '';
@@ -361,7 +368,7 @@ struct Index {
       this.repeatOption = '无';
       this.settingPanel = '';
       this.showAddSheet = false;
-      this.statusText = '已添加';
+      this.statusText = this.configured ? '已添加' : '已保存到本机';
       await this.refreshLists();
     } catch (err) {
       this.safeShowToast('添加失败');
@@ -378,6 +385,7 @@ struct Index {
     this.reminderOption = '无';
     this.repeatOption = '无';
     this.settingPanel = '';
+    this.priority = this.collection === '重要' ? 1 : 0;
     this.showAddSheet = true;
   }
 
@@ -458,6 +466,7 @@ struct Index {
   }
 
   private openEditTask(task: TodoTask): void {
+    this.priority = task.priority;
     this.editingTitle = task.title;
     this.editingDescription = task.description;
     this.editingTask = {
@@ -540,8 +549,7 @@ struct Index {
       }
       .width(38)
       .height(38)
-      .backgroundColor($r('app.color.accent_soft'))
-      .borderRadius(10)
+      .backgroundColor(Color.Transparent)
 
       Column({ space: 3 }) {
         Text('服务器与日历')
@@ -564,9 +572,7 @@ struct Index {
     .width('100%')
     .height(66)
     .padding(14)
-    .backgroundColor($r('app.color.surface'))
-    .border({ width: 0.5, color: $r('app.color.divider') })
-    .borderRadius(22)
+    .backgroundColor(Color.Transparent)
     .onClick(() => {
       this.calendars = [];
       this.selectedCalendarIndex = 0;
@@ -579,10 +585,10 @@ struct Index {
     Column({ space: 18 }) {
       if (!this.configured) {
         Column({ space: 10 }) {
-          Image($r('app.media.material_planner')).width(156).height(146).objectFit(ImageFit.Contain)
+          Image($r('app.media.cat_idle')).width(156).height(146).objectFit(ImageFit.Contain)
             .accessibilityLevel('no')
           Text('欢迎来到拾序').fontSize(28).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-          Text('连接你的任务清单，让每一天井然有序。')
+          Text('连接后，本机待办将同步到你选择的日历。')
             .fontSize(13).fontColor($r('app.color.text_secondary')).textAlign(TextAlign.Center)
         }.width('100%').padding({ top: 12, bottom: 12 })
       }
@@ -596,27 +602,25 @@ struct Index {
         TextInput({ placeholder: '服务器地址', text: this.serverUrl })
           .onChange((value: string) => this.serverUrl = value)
           .height(50)
-          .backgroundColor($r('app.color.surface_input'))
-          .borderRadius(12)
+          .backgroundColor(Color.Transparent).borderRadius(0)
+          .border({ width: { bottom: 0.5 }, color: $r('app.color.divider') })
 
         TextInput({ placeholder: '用户名', text: this.username })
           .onChange((value: string) => this.username = value)
           .height(50)
-          .backgroundColor($r('app.color.surface_input'))
-          .borderRadius(12)
+          .backgroundColor(Color.Transparent).borderRadius(0)
+          .border({ width: { bottom: 0.5 }, color: $r('app.color.divider') })
 
         TextInput({ placeholder: '密码或 App Password', text: this.password })
           .type(InputType.Password)
           .onChange((value: string) => this.password = value)
           .height(50)
-          .backgroundColor($r('app.color.surface_input'))
-          .borderRadius(12)
+          .backgroundColor(Color.Transparent).borderRadius(0)
+          .border({ width: { bottom: 0.5 }, color: $r('app.color.divider') })
       }
       .width('100%')
       .padding(14)
-      .backgroundColor($r('app.color.surface'))
-      .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(22)
+      .backgroundColor(Color.Transparent)
 
       Button(this.testingConnection ? '正在连接' : '测试连接')
         .height(46)
@@ -624,7 +628,7 @@ struct Index {
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.on_accent'))
         .backgroundColor($r('app.color.accent'))
-        .borderRadius(14)
+        .borderRadius(23)
         .enabled(!this.testingConnection)
         .onClick(() => this.discoverCalendars())
         .width('100%')
@@ -654,8 +658,7 @@ struct Index {
             .width('100%')
             .height(48)
             .padding({ left: 12, right: 8 })
-            .backgroundColor($r('app.color.surface'))
-            .borderRadius(12)
+            .backgroundColor(Color.Transparent)
           }, (calendar: CalendarSource) => calendar.href)
         }
         .width('100%')
@@ -666,7 +669,7 @@ struct Index {
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.on_accent'))
           .backgroundColor($r('app.color.accent'))
-          .borderRadius(14)
+          .borderRadius(23)
           .onClick(() => this.saveAccount())
           .width('100%')
       }
@@ -695,9 +698,7 @@ struct Index {
             .type(ButtonType.Normal)
             .width(42)
             .height(42)
-            .backgroundColor($r('app.color.surface'))
-            .border({ width: 0.5, color: $r('app.color.divider') })
-            .borderRadius(14)
+            .backgroundColor(Color.Transparent)
             .onClick(() => this.settingsPathStack.pop())
 
             Text('服务器设置')
@@ -731,34 +732,27 @@ struct Index {
   }
 
   private filteredActiveTasks(): TodoTask[] {
-    if (this.searchQuery.trim().length === 0) {
-      return this.tasks;
-    }
-    const q = this.searchQuery.trim().toLowerCase();
-    return this.tasks.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
+    const query = this.searchQuery.trim().toLowerCase();
+    const now = Date.now();
+    return this.tasks.filter((task: TodoTask) => {
+      if (!this.matchesQuery(task, query)) return false;
+      if (this.collection === '重要') return task.priority > 0 && task.priority < 5;
+      if (this.collection === '全部') return true;
+      const offset = dueDayOffset(task.due, now);
+      if (offset === undefined) return false;
+      if (this.collection === '今天') return offset === 0;
+      if (this.collection === '逾期') return offset < 0;
+      return offset > 0 && offset <= 7;
+    });
+  }
+
+  private matchesQuery(task: TodoTask, query: string): boolean {
+    return task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query);
   }
 
   private filteredCompletedTasks(): TodoTask[] {
-    if (this.searchQuery.trim().length === 0) {
-      return this.completed;
-    }
-    const q = this.searchQuery.trim().toLowerCase();
-    return this.completed.filter((t: TodoTask) => t.title.toLowerCase().includes(q));
-  }
-
-  private pendingTaskCount(): number {
-    return this.filteredActiveTasks().filter((t: TodoTask) => t.syncState !== 'synced').length;
-  }
-
-  private todayTaskCount(): number {
-    const beijingNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const year = beijingNow.getUTCFullYear();
-    const month = beijingNow.getUTCMonth() + 1;
-    const day = beijingNow.getUTCDate();
-    return this.filteredActiveTasks().filter((task: TodoTask) => {
-      const due = parseDueAsBeijing(task.due);
-      return due !== undefined && due.year === year && due.month === month && due.day === day;
-    }).length;
+    const query = this.searchQuery.trim().toLowerCase();
+    return this.completed.filter((task: TodoTask) => this.matchesQuery(task, query));
   }
 
   private dateHeading(): string {
@@ -778,22 +772,42 @@ struct Index {
   }
 
   @Builder
+  private PixelPreference(title: string, hint: string, option: 'feedingAnimation' | 'compactRows') {
+    Row({ space: 8 }) {
+      Column({ space: 3 }) {
+        Text(title).fontSize(15).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+        Text(hint).fontSize(12).fontColor($r('app.color.text_secondary'))
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+      Toggle({ type: ToggleType.Switch, isOn: option === 'feedingAnimation' ? this.feedingAnimation : this.compactRows })
+        .selectedColor($r('app.color.accent')).accessibilityText(title)
+        .onChange((enabled: boolean) => {
+          if (option === 'feedingAnimation') this.feedingAnimation = enabled;
+          else this.compactRows = enabled;
+          this.syncService.savePixelOption(option, enabled).catch(() => this.safeShowToast('外观偏好保存失败'));
+        })
+    }.width('100%').constraintSize({ minHeight: 54 })
+  }
+
+  @Builder
   private SettingsView() {
     Column({ space: 12 }) {
       Row({ space: 14 }) {
-        Image($r('app.media.brand_icon')).width(64).height(64).objectFit(ImageFit.Contain)
+        Image($r('app.media.cat_idle')).width(64).height(64).objectFit(ImageFit.Contain)
           .accessibilityLevel('no')
         Column({ space: 4 }) {
-          Text('拾序').fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-          Text('让每一天，井然有序').fontSize(13).fontColor($r('app.color.text_secondary'))
+          Text('我的猫咪手帐').fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+          Text('猫咪手帐 · 外观与偏好').fontSize(13).fontColor($r('app.color.text_secondary'))
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }
-      .width('100%').padding(18)
-      .linearGradient({ angle: 120, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
-      .borderRadius(26)
+      .width('100%').padding({ top: 8, bottom: 8 })
       this.SectionLabel('同步与账号')
       this.ServerSettingsMenu()
       this.SectionLabel('外观与交互')
+      Column() {
+        this.PixelPreference('喂食动画', '完成时看小猫跳下、吃猫条和清空粮碗', 'feedingAnimation')
+        Divider().color($r('app.color.divider'))
+        this.PixelPreference('紧凑清单', '缩小行距，一屏显示更多待办', 'compactRows')
+      }.width('100%').padding({ left: 4, right: 4 })
       WidgetAppearanceCard({
         selectedStyle: this.widgetBlurStyle,
         onStyleChange: (style: WidgetBlurStyle): void => {
@@ -819,9 +833,7 @@ struct Index {
       }
       .width('100%')
       .padding(14)
-      .backgroundColor($r('app.color.surface'))
-      .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(22)
+      .backgroundColor(Color.Transparent)
 
       this.SectionLabel('数据管理')
       Column() {
@@ -830,7 +842,7 @@ struct Index {
             .fontSize(19)
             .fontColor([$r('app.color.accent')])
             .width(30)
-          Text('立即同步')
+          Text(this.configured ? '立即同步' : '连接日历以同步')
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.text_primary'))
@@ -841,7 +853,10 @@ struct Index {
         }
         .width('100%')
         .height(52)
-        .onClick(() => this.syncNow())
+        .onClick(() => {
+          if (this.configured) this.syncNow();
+          else this.settingsPathStack.pushPath({ name: 'serverSettings' });
+        })
 
         Divider()
           .color($r('app.color.divider'))
@@ -852,7 +867,7 @@ struct Index {
             .fontSize(19)
             .fontColor([$r('app.color.danger_text')])
             .width(30)
-          Text('清空本地缓存')
+          Text(this.configured ? '清空本地缓存' : '清空本机待办')
             .fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.danger_text'))
@@ -862,11 +877,11 @@ struct Index {
         .height(52)
         .onClick(() => {
           this.uiContext.getPromptAction().showDialog({
-            title: '清空本地缓存？',
-            message: '本机待办缓存将被移除。请先同步尚未上传的更改。',
+            title: this.configured ? '清空本地缓存？' : '清空本机待办？',
+            message: this.configured ? '本机待办缓存将被移除。请先同步尚未上传的更改。' : '本机所有待办和已完成记录都将被删除，无法撤销。',
             buttons: [
               { text: '取消', color: $r('app.color.accent') },
-              { text: '清空缓存', color: $r('app.color.danger_text') }
+              { text: this.configured ? '清空缓存' : '清空待办', color: $r('app.color.danger_text') }
             ]
           }).then((result) => {
             if (result.index === 1) {
@@ -877,84 +892,24 @@ struct Index {
       }
       .width('100%')
       .padding({ left: 14, right: 14 })
-      .backgroundColor($r('app.color.surface'))
-      .border({ width: 0.5, color: $r('app.color.divider') })
-      .borderRadius(22)
+      .backgroundColor(Color.Transparent)
     }
     .padding({ left: 20, right: 20, top: 8, bottom: 120 })
     .width('100%')
   }
 
   @Builder
-  private HomeTaskSummary() {
-    Row() {
-      Column({ space: 2 }) {
-        Text(`${this.todayTaskCount()}`)
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-        Text('今日待办').fontSize(11).fontColor($r('app.color.text_secondary'))
-      }.layoutWeight(1)
-      Divider().vertical(true).height(22).color($r('app.color.divider'))
-      Column({ space: 2 }) {
-        Text(`${this.filteredActiveTasks().length}`)
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-        Text('进行中').fontSize(11).fontColor($r('app.color.text_secondary'))
-      }.layoutWeight(1)
-      Divider().vertical(true).height(22).color($r('app.color.divider'))
-      Column({ space: 2 }) {
-        Text(`${this.completed.length}`)
-          .fontSize(20).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-        Text('已完成').fontSize(11).fontColor($r('app.color.text_secondary'))
-      }.layoutWeight(1)
-    }
-    .width('100%')
-    .height(64)
-    .padding({ left: 12, right: 12 })
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(22)
-  }
-
-  @Builder
-  private HomeHero() {
-    Row({ space: 4 }) {
-      Column({ space: 7 }) {
-        Text('给生活，留一点从容')
-          .fontSize(19).fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .maxLines(2)
-        Text(this.tasks.length === 0 ? '把想做的事，慢慢变成做过的事。' : '从一件小事开始，让今天井然有序。')
-          .fontSize(12).lineHeight(19)
-          .fontColor($r('app.color.text_secondary'))
-          .maxLines(2)
-        Row({ space: 5 }) {
-          Column().width(5).height(5).borderRadius(3)
-            .backgroundColor(this.pendingTaskCount() > 0 ? $r('app.color.warning_text') : $r('app.color.success'))
-          Text(this.statusText)
-            .fontSize(10).fontColor($r('app.color.text_secondary'))
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        }.width('100%').margin({ top: 3 })
-      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-      Image($r('app.media.material_planner'))
-        .width(110).height(116).objectFit(ImageFit.Contain)
-        .accessibilityLevel('no')
-    }
-    .width('100%').height(140)
-    .padding({ left: 20, right: 8, top: 12, bottom: 12 })
-    .linearGradient({ angle: 120, colors: [[$r('app.color.hero_start'), 0], [$r('app.color.hero_end'), 1]] })
-    .border({ width: 1, color: $r('app.color.glass_edge') })
-    .borderRadius(28)
-  }
-
-  @Builder
   private HomeView() {
-    Column({ space: 12 }) {
-      if (!this.showSearch && (this.homeViewportHeight === 0 || this.homeViewportHeight >= 520)) {
-        this.HomeHero()
-      }
-      if (!this.showSearch && (this.homeViewportHeight === 0 || this.homeViewportHeight >= 420)) {
-        this.HomeTaskSummary()
-      }
+    Column() {
       TaskCards({
         activeTasks: this.filteredActiveTasks(),
+        statusText: this.statusText,
+        totalCount: this.tasks.length,
+        collection: this.collection,
+        onCollection: (value: string): void => { this.collection = value; },
+        compactRows: this.compactRows,
+        addOnLeft: this.fabAlignRules.left !== undefined,
+        feedingAnimation: this.feedingAnimation,
         completedTasks: this.filteredCompletedTasks(),
         completedTotalCount: this.completed.length,
         searchActive: this.searchQuery.trim().length > 0,
@@ -1004,8 +959,8 @@ struct Index {
     }
     .type(ButtonType.Normal).height(46).layoutWeight(1)
     .padding({ left: 14, right: 14 })
-    .backgroundColor(this.scheduleSelected(target) ? $r('app.color.accent_soft') : $r('app.color.surface_input'))
-    .borderRadius(22).onClick(() => {
+    .backgroundColor(Color.Transparent)
+    .borderRadius(3).onClick(() => {
       if (target === 'date' || (target === 'time' && !this.hasDue)) {
         this.showDatePicker();
       } else if (target === 'time') {
@@ -1038,7 +993,8 @@ struct Index {
       .height(60).fontSize(20).fontWeight(FontWeight.Medium)
       .fontColor($r('app.color.text_primary'))
       .placeholderColor($r('app.color.text_tertiary'))
-      .backgroundColor($r('app.color.surface_input')).borderRadius(20)
+      .backgroundColor(Color.Transparent).borderRadius(0).padding({ left: 2, right: 2, top: 8, bottom: 8 })
+      .border({ width: { bottom: 0.5 }, color: $r('app.color.divider') })
     TextArea({ placeholder: '记下一点细节，让行动更轻松（选填）',
       text: editing ? this.editingDescription : this.newDescription })
       .onChange((value: string) => {
@@ -1048,9 +1004,17 @@ struct Index {
           this.newDescription = value;
         }
       })
+      .attributeModifier(this.noteLayout)
       .height(96).fontSize(15).fontColor($r('app.color.text_primary'))
       .placeholderColor($r('app.color.text_tertiary'))
-      .backgroundColor($r('app.color.surface_input')).borderRadius(20)
+      .backgroundColor(Color.Transparent).borderRadius(0).padding({ left: 2, right: 2, top: 8, bottom: 8 })
+      .border({ width: { bottom: 0.5 }, color: $r('app.color.divider') })
+    Row() {
+      Text('重要事项').fontSize(14).fontColor($r('app.color.text_primary')).layoutWeight(1)
+      Toggle({ type: ToggleType.Switch, isOn: this.priority > 0 && this.priority < 5 })
+        .selectedColor($r('app.color.accent')).accessibilityText('重要事项')
+        .onChange((enabled: boolean) => { this.priority = enabled ? 1 : 0; })
+    }.width('100%')
     Row() {
       Text('时间安排').fontSize(12).fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_secondary')).layoutWeight(1)
@@ -1087,8 +1051,8 @@ struct Index {
       Button() {
         SymbolGlyph($r('sys.symbol.xmark')).fontSize(16).fontColor([$r('app.color.text_secondary')])
       }
-      .type(ButtonType.Circle).width(40).height(40)
-      .backgroundColor($r('app.color.surface_input')).accessibilityText('取消编辑')
+      .type(ButtonType.Normal).width(40).height(40)
+      .backgroundColor(Color.Transparent).accessibilityText('取消编辑')
       .onClick(() => {
         if (editing) {
           this.showEditSheet = false;
@@ -1098,7 +1062,7 @@ struct Index {
       })
       Text(editing ? '编辑待办' : '拾起一件小事')
         .fontSize(21).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary')).layoutWeight(1)
-      Button(editing ? '保存' : '添加')
+      Button(editing ? '保存' : '添加').type(ButtonType.Capsule)
         .height(40).padding({ left: 20, right: 20 }).fontSize(14).fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.on_accent')).backgroundColor($r('app.color.accent'))
         .enabled((editing ? this.editingTitle : this.newTitle).trim().length > 0)
@@ -1158,6 +1122,7 @@ struct Index {
       return;
     }
     const taskId = this.editingTask.id;
+    const priority = this.priority;
     const title = this.editingTitle.trim();
     const description = this.editingDescription.trim();
     const due = this.hasDue ? this.formatDueForCalDav() : '';
@@ -1170,7 +1135,7 @@ struct Index {
       }
       return {
         id: task.id, uid: task.uid, href: task.href, calendarHref: task.calendarHref,
-        etag: task.etag, title, description, due, priority: task.priority, status: task.status,
+        etag: task.etag, title, description, due, priority, status: task.status,
         completedAt: task.completedAt, percentComplete: task.percentComplete, rawIcs: task.rawIcs,
         syncState: 'pending', updatedAt: Date.now()
       };
@@ -1192,7 +1157,8 @@ struct Index {
         description,
         due,
         reminder,
-        repeat
+        repeat,
+        priority
       );
       this.statusText = '已更新';
       await this.refreshLists();
@@ -1211,9 +1177,10 @@ struct Index {
           Button(option)
             .type(ButtonType.Normal)
             .fontSize(13)
-            .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.on_accent') : $r('app.color.text_secondary'))
-            .backgroundColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.surface_input'))
-            .borderRadius(22)
+            .fontColor((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : $r('app.color.text_secondary'))
+            .fontWeight((target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? FontWeight.Bold : FontWeight.Normal)
+            .backgroundColor(Color.Transparent)
+            .border({ width: { bottom: 2 }, color: (target === 'reminder' ? this.reminderOption : this.repeatOption) === option ? $r('app.color.accent') : Color.Transparent })
             .height(32)
             .padding({ left: 12, right: 12 })
             .onClick(() => {
@@ -1243,11 +1210,7 @@ struct Index {
         .width('100%')
         .height('100%')
         .backgroundColor($r('app.color.page_background'))
-        .onAreaChange((_oldValue: Area, newValue: Area) => {
-          const h = newValue.height;
-          if (typeof h === 'number') {
-            this.homeViewportHeight = h;
-          }
+        .onAreaChange(() => {
           // Tabs 首帧布局完成即触发 bar 重排，让 47→48 的跳变发生在首帧内
           this.scheduleTabBarLayoutPass();
         })
@@ -1285,7 +1248,7 @@ struct Index {
         Column({ space: 3 }) {
           Text(this.selectedTabIndex === 1 ? '设置' : '拾序')
             .fontSize(30).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
-          Text(this.selectedTabIndex === 1 ? '按你的习惯，安排每一天' : this.dateHeading())
+          Text(this.selectedTabIndex === 1 ? '拾序 · 猫咪手帐' : this.dateHeading())
             .fontSize(12).fontColor($r('app.color.text_secondary'))
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
 
@@ -1300,9 +1263,7 @@ struct Index {
           .type(ButtonType.Normal)
           .width(42)
           .height(42)
-          .backgroundColor($r('app.color.surface'))
-          .border({ width: 0.5, color: $r('app.color.divider') })
-          .borderRadius(21)
+          .backgroundColor(Color.Transparent)
           .accessibilityText('搜索待办')
           .onClick(() => {
             if (this.searchQuery.length > 0) {
@@ -1317,13 +1278,12 @@ struct Index {
       .padding({ left: 20, right: 20, top: this.uiContext.px2vp(this.statusBarHeight) + 10, bottom: 8 })
 
       if (this.showSearch && this.selectedTabIndex === 0) {
-        Search({ value: this.searchQuery, placeholder: '搜索待办事项...' })
+        Search({ value: this.searchQuery, placeholder: '搜索标题或备注' })
           .onChange((value: string) => this.searchQuery = value)
           .height(44)
           .textFont({ size: 16 })
           .placeholderFont({ size: 16 })
-          .backgroundColor($r('app.color.surface'))
-          .borderRadius(14)
+          .backgroundColor($r('app.color.surface_input')).borderRadius(22)
           .margin({ left: 20, right: 20, bottom: 6 })
       }
 
@@ -1391,33 +1351,14 @@ struct Index {
         })
 
       Column() {
-        if (this.configured) {
-          Navigation(this.settingsPathStack) {
-            this.ConfiguredView()
-          }
-          .hideTitleBar(true)
-          .mode(NavigationMode.Stack)
-          .navDestination(this.SettingsPathMap)
-          .width('100%')
-          .height('100%')
-        } else {
-          Refresh({ refreshing: $$this.refreshing, promptText: '正在同步' }) {
-            Scroll() {
-              Column() {
-                this.SetupView()
-              }
-              .width('100%')
-              .padding({ top: this.uiContext.px2vp(this.statusBarHeight) + 8, bottom: 24 })
-              .backgroundColor($r('app.color.page_background'))
-            }
-            .width('100%')
-            .scrollBar(BarState.Auto)
-            .align(Alignment.TopStart)
-          }
-          .layoutWeight(1)
-          .width('100%')
-          .pullToRefresh(false)
+        Navigation(this.settingsPathStack) {
+          this.ConfiguredView()
         }
+        .hideTitleBar(true)
+        .mode(NavigationMode.Stack)
+        .navDestination(this.SettingsPathMap)
+        .width('100%')
+        .height('100%')
       }
       .width('100%')
       .height('100%')
@@ -1425,29 +1366,6 @@ struct Index {
         top: { anchor: '__container__', align: VerticalAlign.Top },
         left: { anchor: '__container__', align: HorizontalAlign.Start }
       })
-
-      if (this.configured) {
-        if (this.selectedTabIndex === 0) {
-          Button() {
-            SymbolGlyph($r('sys.symbol.plus'))
-              .fontSize(24)
-              .fontWeight(FontWeight.Bold)
-              .fontColor([$r('app.color.on_accent')])
-          }
-          .type(ButtonType.Normal)
-          .width(56)
-          .height(56)
-          .borderRadius(28)
-          .backgroundColor($r('app.color.accent'))
-          .shadow({ radius: 18, color: $r('app.color.shadow'), offsetX: 0, offsetY: 8 })
-          .scale({ x: this.showAddSheet ? 0.94 : 1, y: this.showAddSheet ? 0.94 : 1 })
-          .animation({ duration: 160, curve: Curve.EaseOut })
-          .alignRules(this.fabAlignRules)
-          .accessibilityText('添加待办')
-          .margin({ left: 24, right: 24, bottom: 160 })
-          .onClick(() => this.openAddSheet())
-        }
-      }
 
       Column()
         .width(0)
